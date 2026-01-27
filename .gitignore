@@ -1,0 +1,21 @@
+cat <<EOT >> .gitignore
+# Ignore Virtual Environment
+venv/
+env/
+.env
+
+# Ignore Data (Too large, we generate this locally)
+data/
+*.parquet
+*.csv
+
+# Ignore Mac OS clutter
+.DS_Store
+
+# Ignore Python compiled files
+__pycache__/
+*.pyc
+
+# Ignore VS Code local settings
+.vscode/
+EOT
