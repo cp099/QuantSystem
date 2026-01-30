@@ -19,3 +19,7 @@ __pycache__/
 # Ignore VS Code local settings
 .vscode/
 EOT
+
+# Ignore ML Models
+models/
+*.pkl
