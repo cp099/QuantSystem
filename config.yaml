@@ -30,9 +30,10 @@ regime_model:
 # -- Risk Management Parameters --
 risk:
   target_volatility: 0.20
-  max_position_leverage: 1.5
   max_portfolio_leverage: 2.0
-  stop_loss_atr_multiple: 3.0
+  # -- V2 SETTINGS --
+  correlation_window: 60     
+  concentration_threshold: 0.7
 
 # -- Portfolio & Strategy Settings --
 portfolio:
