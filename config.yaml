@@ -10,12 +10,11 @@ system:
 # -- Data Ingestion & Universe --
 data:
   provider: "yfinance"
-  # Universe is now a list of dictionaries for scalability
   universe:
-    - { symbol: "SPY", currency: "USD", asset_class: "equity_index" }
-    # Example for future expansion:
-    # - { symbol: "^GDAXI", currency: "EUR", asset_class: "equity_index" }
-    # - { symbol: "EURUSD=X", currency: "USD", asset_class: "fx" }
+    - { symbol: "SPY", currency: "USD", asset_class: "equity", country: "US" }
+    - { symbol: "GLD", currency: "USD", asset_class: "commodity", country: "US" }
+    - { symbol: "TLT", currency: "USD", asset_class: "bond", country: "US" }
+    - { symbol: "^GDAXI", currency: "EUR", asset_class: "equity_index", country: "DE" } 
 
 # -- Regime Classification Model --
 regime_model:
