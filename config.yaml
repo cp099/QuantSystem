@@ -18,9 +18,14 @@ data:
 
 # -- Regime Classification Model --
 regime_model:
-  n_components: 4 # Number of hidden states (regimes)
-  features: ['Vol_ratio', 'Momentum', 'Vol_short'] # Features used for training
-  model_save_path: "models/regime_hmm_v1.pkl"
+  n_components: 5
+  features: ['Normalized_return', 'Atr']
+  model_save_path: "models/regime_hmm_v2.pkl"
+  # -- ABMSM SETTINGS --
+  abmsm:
+    learning_rate: 0.01      # Alpha (Emission adaptation speed)
+    decay_factor: 0.999      # Lambda (Transition memory persistence)
+    save_path: "models/proprietary_abmsm.pkl"
 
 # -- Risk Management Parameters --
 risk:

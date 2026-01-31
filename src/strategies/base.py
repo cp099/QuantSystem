@@ -1,21 +1,22 @@
-from abc import ABC, abstractmethod
 import pandas as pd
 import numpy as np
+from abc import ABC, abstractmethod
 
 class Strategy(ABC):
     def __init__(self, name):
         self.name = name
-        self.position = 0 # 0 = Flat, 1 = Long, -1 = Short
-        self.equity_curve = []
         
     @abstractmethod
-    def generate_signal(self, current_bar, current_regime):
+    def generate_signals(self, market_data_slice, regime_probs):
         """
+        V2 Interface:
         Input:
-        - current_bar: A dictionary/series with 'Close', 'Open', 'High', 'Low'
-        - current_regime: Integer (0, 1, 2, 3)
+        - market_data_slice: A dictionary { 'SPY': row_series, 'GLD': row_series, ... }
+                             containing the data for the current timestamp for all assets.
+        - regime_probs: Array of probabilities [P(Regime0), P(Regime1), ...] from ABMSM.
         
         Output:
-        - Signal: 1.0 (Buy), -1.0 (Sell), 0.0 (Hold)
+        - signals: A dictionary { 'SPY': 1.0, 'GLD': 0.0, ... }
+                   representing target allocation weights (0.0 to 1.0) for this specific engine.
         """
         pass

@@ -4,22 +4,31 @@ from src.strategies.base import Strategy
 
 class TrendEngine(Strategy):
     """
-    Traffic Light Trend Strategy:
-    - GREEN LIGHT (Regime 0): Aggressive Long
-    - YELLOW LIGHT (Regime 2): Moderate Long
-    - RED LIGHT (Regime 1 or 3): Cash / Flat
+    V2 Trend Engine:
+    - Iterates through all assets.
+    - Checks Regime (Favor State 0 & 4).
+    - Checks Asset-Specific Trend (Price > MA).
     """
     def __init__(self):
         super().__init__("Trend_Engine")
         
-    def generate_signal(self, current_bar, current_regime):
-        # Regime 0 = Low Vol Bull (Best for Trend)
-        if current_regime == 0:
-            return 1.0 # 100% Long
+    def generate_signals(self, market_data_slice, regime_probs):
+        signals = {}
+        
+        # 1. Regime Check
+        bullish_prob = regime_probs[0] + regime_probs[4]
+        
+        if bullish_prob < 0.5:
+            return {} 
             
-        # Regime 2 = Recovery (Good for Trend)
-        elif current_regime == 2:
-            return 1.0 # Long
+        # 2. Asset Check
+        for symbol, row in market_data_slice.items():
+            if 'Close' not in row or 'Momentum' not in row:
+                continue
             
-        # Regime 1 (Crash) or 3 (Chop) -> No Trend Trading
-        return 0.0
+            if row['Momentum'] > 0:
+                signals[symbol] = 1.0
+            else:
+                signals[symbol] = 0.0
+                
+        return signals
