@@ -2,40 +2,30 @@
 # System Configuration V2.0
 # ======================================================
 
-# -- System-Wide Settings --
 system:
   base_currency: "USD"
   log_level: "INFO"
 
-# -- Data Ingestion & Universe --
 data:
   provider: "yfinance"
-  universe:
-    - { symbol: "SPY", currency: "USD", asset_class: "equity", country: "US" }
-    - { symbol: "GLD", currency: "USD", asset_class: "commodity", country: "US" }
-    - { symbol: "TLT", currency: "USD", asset_class: "bond", country: "US" }
-    - { symbol: "^GDAXI", currency: "EUR", asset_class: "equity_index", country: "DE" } 
+  # Thresholds for liquidity filtering
+  min_volume_threshold: 100000 
 
-# -- Regime Classification Model --
 regime_model:
   n_components: 5
-  features: ['Normalized_return', 'Atr']
-  model_save_path: "models/regime_hmm_v2.pkl"
-  # -- ABMSM SETTINGS --
+  # Three Senses: Direction, Risk, Compression
+  features: ['Normalized_return', 'Atr', 'Vol_ratio']
+  # instinct_models/ will store the 'Global Knowledge'
+  instinct_save_path: "models/base_instinct.pkl"
   abmsm:
-    learning_rate: 0.01      # Alpha (Emission adaptation speed)
-    decay_factor: 0.999      # Lambda (Transition memory persistence)
+    learning_rate: 0.02 # Increased alpha for faster stock-specific adaptation
+    decay_factor: 0.99  # Slightly lower lambda for better memory turnover
     save_path: "models/proprietary_abmsm.pkl"
 
-# -- Risk Management Parameters --
 risk:
-  target_volatility: 0.20
+  target_volatility: 0.25 # Institutional standard
   max_portfolio_leverage: 2.0
-  # -- V2 SETTINGS --
-  correlation_window: 60     
-  concentration_threshold: 0.7
+  entropy_threshold: 0.85 # Loosened from 0.7 to allow high-growth trades (NVDA)
 
-# -- Portfolio & Strategy Settings --
 portfolio:
   initial_capital: 100000
-  execution_state_file: "data/processed/portfolio_state.json"

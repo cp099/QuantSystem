@@ -9,3 +9,5 @@ PyYAML>=6.0
 joblib>=1.2.0
 hmmlearn>=0.3.0
 pytest>=7.0
+matplotlib
+seaborn

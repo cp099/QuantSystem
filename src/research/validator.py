@@ -2,36 +2,30 @@ import pandas as pd
 import numpy as np
 
 class StrategyValidator:
-    """Institutional Metrics Engine - Headless."""
-    
     @staticmethod
     def calculate_metrics(equity_series):
-        if not equity_series:
-            return {"Error": "No data"}
-            
+        if not equity_series: return {"Error": "No data"}
         df = pd.Series(equity_series)
         returns = df.pct_change().dropna()
-        
-        # Risk-Adjusted Metrics
         sharpe = (returns.mean() / returns.std()) * np.sqrt(252) if returns.std() != 0 else 0
-        
-        # Drawdown
         cum_max = df.cummax()
-        drawdown = (df - cum_max) / cum_max
-        max_dd = drawdown.min()
+        max_dd = ((df - cum_max) / cum_max).min()
         
         return {
-            "Total Return": f"{((df.iloc[-1] / df.iloc[0]) - 1) * 100:.2f}%",
-            "Sharpe Ratio": round(sharpe, 2),
-            "Max Drawdown": f"{max_dd * 100:.2f}%",
-            "Final Equity": f"${df.iloc[-1]:,.2f}"
+            "Return": f"{((df.iloc[-1] / df.iloc[0]) - 1) * 100:.2f}%",
+            "Sharpe": round(sharpe, 2),
+            "MaxDD": f"{max_dd * 100:.2f}%",
+            "Final": df.iloc[-1]
         }
 
-    @staticmethod
-    def print_report(name, metrics):
-        print(f"\n{'='*45}")
-        print(f" PERFORMANCE AUDIT: {name}")
-        print(f"{'-'*45}")
-        for k, v in metrics.items():
-            print(f"{k:<20}: {v}")
-        print(f"{'='*45}\n")
+    def print_dual_report(self, name, local_metrics, usd_metrics, local_ccy):
+        print(f"\n{'='*60}")
+        print(f" INVESTMENT MEMORANDUM: {name}")
+        print(f"{'-'*60}")
+        print(f"{'METRIC':<15} | {'LOCAL ('+local_ccy+')':<18} | {'BASE (USD)':<15}")
+        print(f"{'-'*60}")
+        print(f"{'Total Return':<15} | {local_metrics['Return']:<18} | {usd_metrics['Return']:<15}")
+        print(f"{'Sharpe Ratio':<15} | {local_metrics['Sharpe']:<18} | {usd_metrics['Sharpe']:<15}")
+        print(f"{'Max Drawdown':<15} | {local_metrics['MaxDD']:<18} | {usd_metrics['MaxDD']:<15}")
+        print(f"{'Final Equity':<15} | {local_ccy} {local_metrics['Final']:,.0f} | ${usd_metrics['Final']:,.0f}")
+        print(f"{'='*60}\n")

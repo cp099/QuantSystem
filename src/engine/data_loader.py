@@ -1,87 +1,47 @@
+import yfinance as yf
 import pandas as pd
 import numpy as np
-import yfinance as yf
-import yaml
-import os
 
-class MultiAssetLoader:
-    def __init__(self, config_path='config.yaml'):
-        with open(config_path, 'r') as f:
-            self.config = yaml.safe_load(f)
+class UniversalLoader:
+    def get_market_context(self, ticker):
+        if ticker.endswith(".NS") or ticker.endswith(".BO"):
+            return "^NSEI", "INR", "USDINR=X"
+        return "SPY", "USD", None
+
+    def fetch_and_engineer(self, ticker):
+        bench, local_ccy, fx_ticker = self.get_market_context(ticker)
+        print(f">>> Syncing Global Feed: {ticker} | Benchmark: {bench}")
         
-        self.universe = self.config['data']['universe']
-        self.base_currency = self.config['system']['base_currency']
-        self.raw_data_path = "data/raw"
-        self.processed_data_path = f"data/processed/{self.base_currency}"
-        os.makedirs(self.processed_data_path, exist_ok=True)
-        self.fx_rates = {}
-
-    def _get_fx_rate(self, quote_ccy):
-        if quote_ccy == self.base_currency: return None
-        pair = f"{quote_ccy}{self.base_currency}=X"
-        if pair not in self.fx_rates:
-            print(f"Fetching FX rate for {pair}...")
-            fx_df = yf.download(pair, period="5y", progress=False, auto_adjust=True)
-            self.fx_rates[pair] = fx_df['Close']
-        return self.fx_rates[pair]
-
-    def load_and_process_data(self):
-        print("\n--- Starting High-Density Data Processing ---")
-        processed_data = {}
+        tickers = [ticker, bench]
+        if fx_ticker: tickers.append(fx_ticker)
         
-        for asset in self.universe:
-            symbol = asset['symbol']
-            currency = asset['currency']
-            
-            # Smart Search for the file in any subfolder of data/raw
-            filepath = None
-            for root, dirs, files in os.walk(self.raw_data_path):
-                if f"{symbol}.parquet" in files:
-                    filepath = os.path.join(root, f"{symbol}.parquet")
-                    break
-            
-            if not filepath:
-                print(f"FAILED to find raw data for {symbol}. Skipping.")
-                continue
-            
-            print(f"Processing {symbol} (Found at {filepath})...")
-            df = pd.read_parquet(filepath)
-            
-            # Clean columns
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-            df.columns = [col.capitalize() for col in df.columns]
-            df = df[~df.index.duplicated(keep='first')]
-            
-            # 1. FX CONVERSION
-            if currency != self.base_currency:
-                fx_rate = self._get_fx_rate(currency)
-                if fx_rate is not None and not fx_rate.empty:
-                    df_base = df.copy()
-                    df_base, fx_rate = df_base.align(fx_rate, join='left', axis=0)
-                    fx_rate = fx_rate.ffill().bfill()
-                    for col in ['Open', 'High', 'Low', 'Close']:
-                        p_vals = df_base[col].values.flatten()
-                        f_vals = fx_rate.values.flatten()
-                        df_base[col] = pd.Series(p_vals * f_vals, index=df_base.index)
-                else: df_base = df.copy()
-            else: df_base = df.copy()
+        data = yf.download(tickers, period="5y", auto_adjust=True, progress=False)
+        
+        df_target = data.xs(ticker, axis=1, level=1).dropna()
+        df_bench = data.xs(bench, axis=1, level=1).dropna()
+        df_fx = data.xs(fx_ticker, axis=1, level=1) if fx_ticker else None
 
-            # 2. FEATURE ENGINEERING
-            atr = (df_base['High'] - df_base['Low']).rolling(14).mean()
-            df_base['Atr'] = atr
-            df_base['Normalized_return'] = (df_base['Close'] - df_base['Close'].shift(1)) / atr
-            df_base['Momentum'] = df_base['Close'].pct_change(periods=50) # The Engine needs this!
+        df_target.columns = [c.capitalize() for c in df_target.columns]
+        
+        # --- PROPRIETARY SENSES (V3.5 - 5 DIMENSIONS) ---
+        atr = (df_target['High'] - df_target['Low']).rolling(14).mean()
+        
+        # 1. Velocity
+        df_target['Velocity'] = (df_target['Close'] - df_target['Close'].shift(1)) / atr
+        # 2. Rel_Risk
+        df_target['Rel_Risk'] = atr / atr.rolling(200).mean()
+        # 3. Compression
+        rets = df_target['Close'].pct_change()
+        df_target['Compression'] = rets.rolling(20).std() / rets.rolling(100).std()
+        # 4. Relative Alpha
+        df_target['Rel_Alpha'] = rets.rolling(20).sum() - df_bench['Close'].pct_change().rolling(20).sum()
+        # 5. Volatility Divergence (Stock Vol / Index Vol)
+        df_target['Vol_Div'] = rets.rolling(20).std() / df_bench['Close'].pct_change().rolling(20).std()
+        
+        # FX Normalization
+        if df_fx is not None:
+            df_target['FX_Rate'] = df_fx['Close'].reindex(df_target.index).ffill()
+        else:
+            df_target['FX_Rate'] = 1.0
             
-            vol_s = df_base['Close'].pct_change().rolling(20).std()
-            vol_l = df_base['Close'].pct_change().rolling(100).std()
-            df_base['Vol_ratio'] = vol_s / vol_l
-            
-            df_base.dropna(inplace=True)
-            processed_data[symbol] = df_base
-            
-        print(f"--- Processing Complete. Assets Loaded: {list(processed_data.keys())} ---")
-        return processed_data
-
-if __name__ == "__main__":
-    MultiAssetLoader().load_and_process_data()
+        return df_target.dropna(), df_bench.dropna(), local_ccy
