@@ -122,6 +122,17 @@ class ABMSM:
 
     def save(self, filepath):
         joblib.dump(self, filepath)
+
+    def get_entropy(self):
+        """
+        Proprietary Metric: Calculates the Shannon Entropy of the current belief.
+        Scale: 0.0 (Absolute Certainty) to 1.0 (Complete Confusion).
+        High entropy triggers an automatic portfolio 'Safe Mode'.
+        """
+        # Small epsilon to avoid log(0)
+        p = self.pi + 1e-9
+        entropy = -np.sum(p * np.log2(p)) / np.log2(self.K)
+        return float(entropy)
         
     @staticmethod
     def load(filepath):
