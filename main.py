@@ -1,86 +1,86 @@
 import sys
+import os
+import yaml
 import pandas as pd
-import numpy as np
-import yfinance as yf
-import yaml # Import the YAML library
 from datetime import datetime
 
-from src.features import FeatureEngineer
-from src.regime import RegimeDetector
-from src.risk.manager import RiskManager, RiskConfig
-from src.portfolio import PortfolioController
+# Add root to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__))))
+
+from src.engine.data_loader import MultiAssetLoader
+from src.brain.abmsm import ABMSM
+from src.engine.portfolio import PortfolioControllerV2
+from src.research.validator import StrategyValidator
+# Import all strategies
 from src.strategies.trend_engine import TrendEngine
 from src.strategies.mean_reversion import MeanReversionEngine
-from src.execution import PaperExecutionEngine
+from src.strategies.relative_strength import RelativeStrengthEngine
+from src.strategies.volatility_breakout import VolatilityBreakoutEngine
 
-def load_config(path='config.yaml'):
-    """Loads the system configuration from a YAML file."""
-    with open(path, 'r') as f:
+def load_config():
+    with open('config.yaml', 'r') as f:
         return yaml.safe_load(f)
 
-def run_live_cycle(config):
-    print(f"\n====== LIVE CYCLE START: {datetime.now()} ======")
+def run_headless_audit():
+    """Runs a full system audit and prints an Investment Memorandum."""
+    print(f"--- QUANT OS V2.0 KERNEL AUDIT: {datetime.now()} ---")
+    config = load_config()
     
-    # --- Parameters are now loaded from config ---
-    ticker_info = config['data']['universe'][0] # For V1, we only use the first asset
-    TICKER = ticker_info['symbol']
+    # 1. Initialize Components
+    loader = MultiAssetLoader('config.yaml')
+    brain = ABMSM.load(config['regime_model']['abmsm']['save_path'])
     
-    # 1. Load Live Data
-    print(f"Fetching live data for {TICKER}...")
-    df = yf.download(TICKER, period="2y", interval="1d", progress=False, auto_adjust=True)
+    engines = [
+        TrendEngine(), 
+        MeanReversionEngine(), 
+        RelativeStrengthEngine(top_n=1), 
+        VolatilityBreakoutEngine()
+    ]
+    controller = PortfolioControllerV2('config.yaml', engines)
     
-    # 2. Engineer Features
-    fe = FeatureEngineer(df)
-    fe.add_volatility_features().add_trend_features().add_volume_features()
-    data = fe.get_features()
+    # 2. Load Processed Data
+    data_dict = loader.load_and_process_data()
+    symbols = list(data_dict.keys())
+    timeline = data_dict[symbols[0]].index.sort_values()
     
-    # 3. Initialize and Load/Train Regime Model
-    regime_engine = RegimeDetector(config)
-    try:
-        # Try to load a pre-trained model first
-        regime_engine.load()
-    except FileNotFoundError:
-        # If no model exists, train a new one and save it
-        print("No pre-trained model found. Training a new one...")
-        regime_engine.fit(data)
+    # 3. Backtest Simulation (Headless)
+    equity_hist = []
+    initial_cap = config['portfolio']['initial_capital']
+    equity = initial_cap
+    cash = initial_cap
+    holdings = {s: 0.0 for s in symbols}
+    
+    print(f"Simulating {len(timeline)} bars across {len(symbols)} assets...")
+    
+    for i in range(200, len(timeline)):
+        date = timeline[i]
+        market_slice = {s: df.loc[date] for s, df in data_dict.items() if date in df.index}
+        
+        # Brain Step
+        primary = symbols[0]
+        feats = [market_slice[primary]['Normalized_return'], market_slice[primary]['Atr']]
+        regime_probs = brain.update(feats) # Uses the new brain.update logic
+        
+        # Portfolio Step
+        hist_subset = pd.concat({s: df.iloc[i-60:i]['Normalized_return'] for s, df in data_dict.items()}, axis=1)
+        allocs = controller.update_allocations(regime_probs, market_slice, hist_subset)
+        
+        # Mark to Market & Rebalance
+        equity = cash + sum(holdings[s] * market_slice[s]['Close'] for s in holdings if s in market_slice)
+        equity_hist.append(equity)
+        
+        new_cash = equity
+        for s, weight in allocs.items():
+            if s in market_slice:
+                target_val = equity * weight
+                holdings[s] = target_val / market_slice[s]['Close']
+                new_cash -= target_val
+        cash = new_cash
 
-    # Predict TODAY'S Regime
-    current_row = data.iloc[-1]
-    regime_probs = regime_engine.predict_proba(pd.DataFrame([current_row]))[0]
-    
-    print(f"Detected Regime Probs: {regime_probs.round(2)}")
-    
-    # 4. Initialize Core Components from Config
-    risk_config = RiskConfig(**config['risk']) # Unpack dict into dataclass
-    risk_manager = RiskManager(risk_config, config['portfolio']['initial_capital'])
-    engines = [TrendEngine(), MeanReversionEngine()]
-    controller = PortfolioController(risk_manager, engines)
-    
-    # 5. Determine Allocations
-    controller.update_allocations(regime_probs)
-    print("Target Allocations:", {k: f"{v:.2%}" for k, v in controller.allocations.items()})
-    
-    # 6. Execute
-    executor = PaperExecutionEngine(state_file=config['portfolio']['execution_state_file'])
-    raw_price = df['Close'].iloc[-1]
-    current_price = float(raw_price) if np.isscalar(raw_price) else float(raw_price.iloc[0])
-    print(f"Market Price: ${current_price:.2f}")
-    current_pos = executor.get_current_positions()
-    equity = executor.positions['cash'] + (current_pos.get(TICKER, 0) * current_price)
-    
-    print(f"Current Equity: ${equity:,.2f}")
-    
-    executor.execute_rebalance(
-        controller.allocations, 
-        current_prices={TICKER: current_price}, 
-        total_equity=equity
-    )
+    # 4. Generate Tear Sheet
+    validator = StrategyValidator()
+    metrics = validator.calculate_metrics(equity_hist)
+    validator.print_report("ABMSM ADAPTIVE CORE", metrics)
 
 if __name__ == "__main__":
-    try:
-        config = load_config()
-        run_live_cycle(config)
-    except Exception as e:
-        print(f"CRITICAL ERROR: {e}")
-        import traceback
-        traceback.print_exc()
+    run_headless_audit()

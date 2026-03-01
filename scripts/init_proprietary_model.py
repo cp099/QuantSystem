@@ -3,44 +3,36 @@ import os
 import yaml
 import joblib
 
-# Fix path
+# Fix path for root imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.proprietary.abmsm import ABMSM
-from src.regime_v2 import RegimeDetectorV2
+from src.brain.abmsm import ABMSM
+from src.research.regime_engine import RegimeDetectorV2
 
 def main():
-    print("--- Initializing Proprietary ABMSM Core ---")
-    
-    # 1. Load Config
+    print("--- RE-MINTING PROPRIETARY BRAIN (ABMSM) ---")
     with open('config.yaml', 'r') as f:
         config = yaml.safe_load(f)
         
-    # 2. Load the Offline HMM (V2)
-    # We use the class wrapper to find the path, but we load the raw sklearn model
     offline_detector = RegimeDetectorV2(config)
-    try:
-        offline_detector.load()
-    except FileNotFoundError:
-        print("CRITICAL: Offline HMM model not found. Run scripts/train_regime_model_v2.py first.")
-        return
+    offline_detector.load()
 
-    # 3. Instantiate the Proprietary ABMSM
+    # This now uses src.brain.abmsm
     abmsm = ABMSM(
-        n_regimes=config['regime_model']['n_components'],
-        n_features=len(config['regime_model']['features']),
-        learning_rate=config['regime_model']['abmsm']['learning_rate'],
-        decay_factor=config['regime_model']['abmsm']['decay_factor']
+        K=config['regime_model']['n_components'],
+        D=len(config['regime_model']['features']),
+        alpha=config['regime_model']['abmsm']['learning_rate'],
+        lam=config['regime_model']['abmsm']['decay_factor']
     )
     
-    # 4. Inject Knowledge (The Bridge)
-    # We pass the internal hmmlearn model object to the ABMSM
-    abmsm.initialize_from_hmm(offline_detector.model)
+    # Warm start from HMM
+    abmsm.means = offline_detector.model.means_
+    abmsm.covs = offline_detector.model.covars_
+    abmsm.A = offline_detector.model.transmat_
     
-    # 5. Save the Initialized Brain
     save_path = config['regime_model']['abmsm']['save_path']
-    abmsm.save(save_path)
-    print(f"Proprietary model initialized and encrypted/saved to {save_path}")
+    joblib.dump(abmsm, save_path)
+    print(f"Proprietary model re-minted at {save_path}")
 
 if __name__ == "__main__":
     main()
