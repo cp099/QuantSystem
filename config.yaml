@@ -1,31 +1,38 @@
-# ======================================================
-# System Configuration V2.0
-# ======================================================
+# AETHER BAYESIAN KERNEL (ABK) // SYSTEM CONFIGURATION
+# Institutional Parameter Set - Version 3.5.0
 
+# --- GLOBAL SYSTEM ENVIRONMENT ---
 system:
   base_currency: "USD"
   log_level: "INFO"
 
+# --- DATA INGESTION PARAMETERS ---
 data:
   provider: "yfinance"
-  # Thresholds for liquidity filtering
   min_volume_threshold: 100000 
 
+# --- RECURSIVE KERNEL CONFIGURATION ---
 regime_model:
   n_components: 5
-  # Three Senses: Direction, Risk, Compression
-  features: ['Normalized_return', 'Atr', 'Vol_ratio']
-  # instinct_models/ will store the 'Global Knowledge'
+  # Relativistic Feature Mapping
+  features: ['v', 'r', 'c', 'a', 'd', 'l', 'b']
+  
+  # --- FIX: ADDED MISSING HMM PATH ---
+  model_save_path: "models/regime_hmm_v2.pkl"
   instinct_save_path: "models/base_instinct.pkl"
+  
+  # Adaptive Learning Hyperparameters
   abmsm:
-    learning_rate: 0.02 # Increased alpha for faster stock-specific adaptation
-    decay_factor: 0.99  # Slightly lower lambda for better memory turnover
+    learning_rate: 0.02
+    decay_factor: 0.99
     save_path: "models/proprietary_abmsm.pkl"
 
+# --- INSTITUTIONAL RISK CONTROLS ---
 risk:
-  target_volatility: 0.25 # Institutional standard
+  target_volatility: 0.25
   max_portfolio_leverage: 2.0
-  entropy_threshold: 0.85 # Loosened from 0.7 to allow high-growth trades (NVDA)
+  entropy_threshold: 0.85
 
+# --- ACCOUNT BASIS ---
 portfolio:
   initial_capital: 100000

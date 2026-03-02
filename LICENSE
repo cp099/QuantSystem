@@ -1,0 +1,41 @@
+================================================================================
+AETHER BAYESIAN KERNEL (ABK) // PROPRIETARY LICENSE AGREEMENT
+================================================================================
+Copyright (c) 2026 Chirag P Patil (cp099). All Rights Reserved.
+
+1. PROPRIETARY RIGHTS AND OWNERSHIP
+The Software, including but not limited to the source code, mathematical 
+algorithms, Adaptive Bayesian Markov-Switching Model (ABMSM) logic, 
+statistical weights, and pre-trained model parameters, is the exclusive 
+Intellectual Property of Chirag P Patil. 
+
+2. LIMITED USE AND AUDIT MANDATE
+This software is provided strictly for AUDIT, VALIDATION, and PROOF-OF-CONCEPT 
+purposes. Usage in a live production environment or for commercial exploitation 
+without an executed Commercial Licensing Agreement is strictly prohibited.
+
+3. RESTRICTIONS ON REDISTRIBUTION
+No part of this repository may be reproduced, redistributed, or sub-licensed 
+in any form. Unauthorized mirroring or public distribution of the 'src/brain' 
+module is a violation of proprietary rights and subject to legal action.
+
+4. NON-CIRCUMVENTION AND REVERSE ENGINEERING
+The Licensee (or viewer) agrees not to:
+   a) Decompile, disassemble, or reverse engineer the mathematical kernel.
+   b) Attempt to derive the underlying Bayesian adaptation logic.
+   c) Utilize the relativistic feature engineering methodology to construct 
+      derivative or competing systems.
+
+5. CONFIDENTIALITY
+The mathematical "Senses" and "Online Learning" implementations within this 
+kernel are treated as Trade Secrets. Users are obligated to maintain the 
+confidentiality of the logic and may not disclose technical implementations 
+to third parties.
+
+6. TERMINATION OF ACCESS
+Permission to utilize or audit this code terminates immediately upon any 
+breach of the terms defined above. 
+
+================================================================================
+BY UTILIZING THIS SOFTWARE, YOU ACKNOWLEDGE THE PROPRIETARY STATUS OF THIS ASSET.
+================================================================================

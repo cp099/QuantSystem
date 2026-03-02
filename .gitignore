@@ -1,27 +1,43 @@
-cat <<EOT >> .gitignore
-# Ignore Virtual Environment
+# --- ENVIRONMENT ---
 venv/
 env/
 .env
+build/
+dist/
 
-# Ignore Data (Too large, we generate this locally)
+# --- DATA & PERSISTENCE ---
+# Prevents massive datasets and binary state from bloating the repo
 data/
+models/
 *.parquet
 *.csv
+*.pkl
+*.joblib
+*.jsonl
+*.h5
 
-# Ignore Mac OS clutter
+# --- IP ANALYTICS & REPORTS ---
+# Ensures proprietary audits and visual assets remain local
+reports/
+*.png
+*.pdf
+
+# --- SYSTEM ARTIFACTS ---
+# MacOS
 .DS_Store
+.AppleDouble
+.LSOverride
 
-# Ignore Python compiled files
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Ignore VS Code local settings
+# IDE
 .vscode/
-EOT
-
-# Ignore ML Models
-models/
-*.pkl
-# Ignore Generated Reports
-reports/
+.idea/
+*.swp
