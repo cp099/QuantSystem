@@ -3,42 +3,81 @@ import seaborn as sns
 import pandas as pd
 import numpy as np
 import os
+from fpdf import FPDF
+from datetime import datetime
 
 class SentinelReport:
-    """Generates Institutional Visual Tear Sheets (Headless)."""
-    def __init__(self, ticker):
+    def __init__(self, ticker, local_ccy="INR"):
         self.ticker = ticker
-        plt.style.use('dark_background')
+        self.local_ccy = local_ccy
+        self.report_dir = "reports"
+        self.temp_dir = "reports/temp"
+        os.makedirs(self.temp_dir, exist_ok=True)
+        self.navy, self.crimson = "#001F3F", "#943126"
 
-    def generate(self, hist_local, hist_usd, bench_hist, local_ccy):
-        fig = plt.figure(figsize=(16, 10))
-        gs = fig.add_gridspec(3, 2)
-        
-        # 1. MAIN PERFORMANCE CHART
-        ax1 = fig.add_subplot(gs[0:2, :])
-        ax1.plot(hist_local, color='#00FF00', label=f'ABMSM Kernel ({local_ccy})', linewidth=2)
-        ax1.plot(bench_hist, color='#AAAAAA', label='Benchmark (Index)', linestyle='--', alpha=0.7)
-        ax1.set_title(f"INSTITUTIONAL PERFORMANCE AUDIT: {self.ticker}", color='#FFB000', fontsize=16)
-        ax1.legend()
-        ax1.grid(alpha=0.1)
+    def _generate_visuals(self, hist_local, bench_hist, metrics):
+        dates = metrics['DrawdownSeries'].index
+        plt.rcParams.update({'font.size': 8, 'figure.titlesize': 10})
 
-        # 2. DRAWDOWN CHART
-        ax2 = fig.add_subplot(gs[2, 0])
-        dd = (pd.Series(hist_local) / pd.Series(hist_local).cummax() - 1)
-        ax2.fill_between(range(len(dd)), dd, color='#FF3333', alpha=0.3)
-        ax2.plot(dd, color='#FF3333', linewidth=1)
-        ax2.set_title("Drawdown Profile", color='#FF3333')
-
-        # 3. CURRENCY IMPACT CHART
-        ax3 = fig.add_subplot(gs[2, 1])
-        impact = (pd.Series(hist_usd) / pd.Series(hist_usd).iloc[0]) / (pd.Series(hist_local) / pd.Series(hist_local).iloc[0])
-        ax3.plot(impact, color='#00A6A9', label='FX Impact (USD/Local)')
-        ax3.set_title("Currency Reflexivity Sense", color='#00A6A9')
-        ax3.fill_between(range(len(impact)), 1, impact, where=(impact < 1), color='red', alpha=0.2)
-        
-        plt.tight_layout()
-        os.makedirs("reports", exist_ok=True)
-        report_path = f"reports/{self.ticker.replace('.','_')}_tearsheet.png"
-        plt.savefig(report_path)
-        print(f">>> SENTINEL: Visual Tear Sheet generated at {report_path}")
+        # 1. Performance (Scaled down)
+        plt.figure(figsize=(10, 4))
+        plt.plot(dates, hist_local, color=self.navy, linewidth=1.5, label='Kernel')
+        plt.plot(dates, bench_hist, color='#CCCCCC', linewidth=1, linestyle='--', label='Bench')
+        plt.fill_between(dates, hist_local, 100000, color=self.navy, alpha=0.05)
+        plt.title(f"Cumulative Performance Attribution: {self.ticker}", fontweight='bold')
+        plt.legend(frameon=False); plt.tight_layout()
+        plt.savefig(f"{self.temp_dir}/p.png", dpi=200)
         plt.close()
+
+        # 2. Drawdown (Scaled down)
+        plt.figure(figsize=(10, 2))
+        dd = metrics['DrawdownSeries'] * 100
+        plt.fill_between(dates, dd, 0, color=self.crimson, alpha=0.2)
+        plt.plot(dates, dd, color=self.crimson, linewidth=0.8)
+        plt.title("Intra-Period Drawdown Profile (%)", fontweight='bold')
+        plt.tight_layout()
+        plt.savefig(f"{self.temp_dir}/d.png", dpi=200)
+        plt.close()
+
+    def build_report(self, hist_local, bench_hist, m_l, m_u):
+        self._generate_visuals(hist_local, bench_hist, m_l)
+        pdf = FPDF()
+        pdf.add_page()
+        
+        # Header
+        pdf.set_fill_color(0, 31, 63); pdf.rect(0, 0, 210, 30, 'F')
+        pdf.set_text_color(255, 255, 255); pdf.set_font("Times", 'B', 20)
+        pdf.set_xy(10, 8); pdf.cell(0, 10, "INVESTMENT STRATEGY AUDIT", ln=True)
+        pdf.set_font("Times", '', 9); pdf.cell(0, 5, f"Ticker: {self.ticker} | Generated: {datetime.now().strftime('%Y-%m-%d')}", ln=True)
+
+        # Metrics
+        pdf.set_y(35); pdf.set_text_color(0,0,0); pdf.set_font("Times", 'B', 12)
+        pdf.cell(0, 10, "I. Core Performance Metrics", ln=True)
+        pdf.set_draw_color(0, 31, 63); pdf.line(10, 44, 200, 44)
+        
+        pdf.set_y(46); pdf.set_font("Times", 'B', 8); pdf.set_fill_color(245, 245, 245)
+        w1, w2 = 50, 70
+        pdf.cell(w1, 7, "METRIC", 1, 0, 'L', True)
+        pdf.cell(w2, 7, f"LOCAL ({self.local_ccy})", 1, 0, 'C', True)
+        pdf.cell(w2, 7, "GLOBAL (USD)", 1, 1, 'C', True)
+        
+        pdf.set_font("Times", '', 9)
+        stats = [("Total Return", m_l['Return'], m_u['Return']),
+                 ("Sharpe Ratio", str(m_l['Sharpe']), str(m_u['Sharpe'])),
+                 ("Max Drawdown", m_l['MaxDD'], m_u['MaxDD']),
+                 ("Ann. Volatility", m_l['Volatility'], m_u['Volatility']),
+                 ("Final Liquidation", f"{self.local_ccy} {m_l['Final']:,.0f}", f"$ {m_u['Final']:,.0f}")]
+        for n, l, u in stats:
+            pdf.cell(w1, 6, n, 1); pdf.cell(w2, 6, l, 1, 0, 'C'); pdf.cell(w2, 6, u, 1, 1, 'C')
+
+        # Visuals (Forced onto Page 1)
+        pdf.ln(5); pdf.image(f"{self.temp_dir}/p.png", x=10, w=190)
+        pdf.ln(2); pdf.image(f"{self.temp_dir}/d.png", x=10, w=190)
+
+        # Footer
+        pdf.set_y(270) # Lock to bottom of Page 1
+        pdf.set_font("Times", 'I', 7); pdf.set_text_color(150, 150, 150)
+        pdf.cell(0, 5, "CONFIDENTIAL: Proprietary ABMSM Bayesian Adaptive Kernel Audit", align='C')
+
+        out = f"{self.report_dir}/{self.ticker}_Audit.pdf"
+        pdf.output(out); print(f">>> Audit Exported: {out}")

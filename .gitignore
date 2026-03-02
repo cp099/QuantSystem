@@ -23,3 +23,5 @@ EOT
 # Ignore ML Models
 models/
 *.pkl
+# Ignore Generated Reports
+reports/
