@@ -1,103 +1,120 @@
+"""
+Aether Bayesian Kernel - Black Swan Stress Engine
+Implements synthetic tail-risk injection to validate the recursive 
+adaptation of the Bayesian kernel during extreme market dislocation.
+"""
+
 import pandas as pd
 import numpy as np
 import os
 import sys
 
-# Ensure root is in path
+# Environment configuration
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from src.engine.data_loader import UniversalLoader
 from src.brain.abmsm import ABMSM
-from src.engine.portfolio import PortfolioControllerV2
+from src.engine.portfolio import CapitalAllocator
 from src.research.validator import StrategyValidator
 from src.strategies.trend_engine import TrendEngine
 
-def run_5d_stress_test():
-    print("--- INITIATING 5D BLACK SWAN STRESS TEST ---")
+def run_7d_stress_test():
+    """
+    Executes an institutional stress test via synthetic shock injection.
     
-    # 1. Use the upgraded Universal Loader
+    Inhales SPY historical data and injects a 25% price collapse and 
+    volatility explosion to monitor the latency and accuracy of the 
+    kernel's defensive transition.
+    """
+    print("[STRESS TEST] INITIATING 7-SENSE TAIL-RISK VALIDATION...")
+    
+    # --- PHASE I: COMPONENT INITIALIZATION ---
     loader = UniversalLoader()
     df, bench_df, _ = loader.fetch_and_engineer("SPY")
-    symbols = ["SPY"]
     
-    # 2. Initialize the 5D Brain
-    # Load the instinct model we trained with 5 dimensions
+    # Restoring pre-trained global instinct (7-Dimensional)
     brain = ABMSM.load('models/base_instinct.pkl')
     engines = [TrendEngine()] 
-    controller = PortfolioControllerV2('config.yaml', engines)
+    controller = CapitalAllocator('config.yaml', engines)
     
-    equity_hist = []
-    bench_hist = [] 
-    
+    equity_hist, bench_hist = [], []
     equity, bench = 100000, 100000
     cash, holdings = 100000, {"SPY": 0.0}
     
-    # Audit Window
+    # Defining specific audit window for shock observation
     timeline = df.index[300:700]
     start_px = df.loc[timeline[0], 'Close']
 
-    print(f"Stress Testing across {len(timeline)} bars...")
+    print(f"[STRESS TEST] PROPAGATING {len(timeline)} BARS UNDER ADVERSARIAL CONDITIONS...")
 
+    # --- PHASE II: ADVERSARIAL PROPAGATION ---
     for i, date in enumerate(timeline):
-        # Build market slice
         row = df.loc[date].copy()
-        bench_row = bench_df.loc[date].copy()
         
-        # --- INJECT 25% SHOCK AT BAR 150 ---
+        # SYNTHETIC TAIL-RISK INJECTION
+        # Simulates a -25% gap down and correlated systemic stress
         is_shocked = False
-        if 150 <= i <= 160:
+        if 150 <= i <= 155:
             is_shocked = True
             row['Close'] *= 0.75 
-            row['Velocity'] = -5.0 # High speed crash
-            row['Rel_Risk'] *= 4.0 # Massive vol spike
-            row['Vol_Div'] *= 3.0  # Divergence sense
+            row['v'] = -4.0 # Maximum negative velocity clamp
+            row['r'] = 4.0  # Maximum risk spike clamp
+            row['b'] = -4.0 # Participation collapse
+            row['l'] = -4.0 # Liquidity withdrawal
 
-        # 1. Benchmark (Buy & Hold)
+        # Market Benchmark Update (Linear Buy & Hold)
         bench = (row['Close'] / start_px) * 100000
         bench_hist.append(bench)
 
-        # 2. 5-Dimensional Brain Update
-        # Senses: [Velocity, Rel_Risk, Compression, Rel_Alpha, Vol_Div]
-        feats = [row['Velocity'], row['Rel_Risk'], row['Compression'], row['Rel_Alpha'], row['Vol_Div']]
+        # Bayesian State Update (7 Senses)
+        # Vector: [Velocity, Risk, Compression, Alpha, VolDiv, Liquidity, Breadth]
+        feats = [row['v'], row['r'], row['c'], row['a'], row['d'], row['l'], row['b']]
         probs = brain.update(feats)
         
-        # 3. Alpha Veto Logic
-        bull_states = brain.get_bull_states()
-        p_growth = sum(probs[s] for s in bull_states)
+        # Proprietary Signal Generation
+        signal = brain.get_bayesian_signal()
         entropy = brain.get_entropy()
         
-        # Veto trade if underperforming or confused
-        signal = p_growth
-        if row['Rel_Alpha'] < -0.005 or entropy > 0.88:
+        # Institutional Alpha Veto
+        if row['a'] < -0.01: 
             signal = 0.0
 
-        # 4. Adaptive Portfolio Update
+        # Capital Liquidation Calculation
         current_val = cash + (holdings['SPY'] * row['Close'])
         equity_hist.append(current_val)
         
-        # Rebalance
+        # Position Realignment
         target_shares = (current_val * signal) / row['Close']
         diff = target_shares - holdings['SPY']
         cash -= diff * row['Close']
         holdings['SPY'] = target_shares
 
         if is_shocked and i == 150:
-            print(f"[SHOCK INJECTED] Date: {date.date()} | Brain Entropy: {entropy:.4f}")
+            print(f"[SHOCK ALERT] T+0 SHOCK DETECTED. BRAIN ENTROPY: {entropy:.4f}")
 
-    # Final Comparative Report
+    # --- PHASE III: COMPARATIVE AUDIT ---
     v = StrategyValidator()
-    m_sys = v.calculate_metrics(equity_hist)
-    m_bnch = v.calculate_metrics(bench_hist)
+    m_sys = v.calculate_metrics(equity_hist, timeline)
+    m_bnch = v.calculate_metrics(bench_hist, timeline)
     
-    print(f"\n{'='*55}")
-    print(f"{'METRIC':<20} | {'5D ADAPTIVE':<15} | {'BENCHMARK':<15}")
-    print(f"{'-'*55}")
-    print(f"{'Final Equity':<20} | ${m_sys['Final']:,.0f} | ${m_bnch['Final']:,.0f}")
-    print(f"{'Max Drawdown':<20} | {m_sys['MaxDD']:<15} | {m_bnch['MaxDD']:<15}")
-    print(f"{'Total Return':<20} | {m_sys['Return']:<15} | {m_bnch['Return']:<15}")
-    print(f"{'='*55}")
+    width = 65
+    print("\n" + "="*width)
+    print(f" STRESS TEST COMPARISON: 7-SENSE ADAPTIVE VS BENCHMARK")
+    print("-" * width)
+    print(f"{'METRIC':<20} | {'7D ADAPTIVE':<18} | {'BENCHMARK':<15}")
+    print("-" * width)
     
-    print("\n>>> STATUS: 5-SENSE VALIDATION COMPLETE.")
+    results = [
+        ("Final Equity", f"${m_sys['Final']:,.0f}", f"${m_bnch['Final']:,.0f}"),
+        ("Max Drawdown", m_sys['MaxDD'], m_bnch['MaxDD']),
+        ("Total Return", m_sys['Return'], m_bnch['Return'])
+    ]
+    
+    for name, s, b in results:
+        print(f"{name:<20} | {s:<18} | {b:<15}")
+    
+    print("="*width)
+    print("\n[STRESS TEST] RESILIENCE VALIDATION COMPLETE.")
 
 if __name__ == "__main__":
-    run_5d_stress_test()
+    run_7d_stress_test()
