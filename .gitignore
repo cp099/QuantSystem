@@ -40,4 +40,5 @@ htmlcov/
 # IDE
 .vscode/
 .idea/
-*.swp
+*.swpadmin/
+admin/
