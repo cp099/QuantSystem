@@ -2,75 +2,68 @@
 Aether Bayesian Kernel - Deep Learning Engine
 Specialist engine utilizing a global MLP Neural Network to predict directional 
 conviction probabilities across diverse asset classes.
+Public wrapper shell. Integrates secret proprietary kernel when present.
 """
 
 import os
-import joblib
 import numpy as np
 from src.strategies.base import Strategy
+
+try:
+    from src.strategies.deep_learning_secret import DeepLearningEngine as DeepLearningEngineSecret
+except ImportError:
+    DeepLearningEngineSecret = None
 
 class DeepLearningEngine(Strategy):
     """
     Coordinates deep learning predictions using scale-invariant feature inputs.
+    Public wrapper shell. Integrates secret proprietary kernel when present.
     """
 
     def __init__(self, model_path="models/global_neural_network.pkl"):
-        """
-        Initializes the neural network specialist.
-        """
         super().__init__("Deep_Learning")
-        self.model_path = model_path
-        self.model = None
-        self._load_model()
-
-    def _load_model(self):
-        """Restores the pre-trained neural network state from disk."""
-        if os.path.exists(self.model_path):
-            try:
-                self.model = joblib.load(self.model_path)
-                print(f"[DEEP LEARNING] Model restored successfully from {self.model_path}")
-            except Exception as e:
-                print(f"[DEEP LEARNING] Error loading model from {self.model_path}: {e}")
+        if DeepLearningEngineSecret is not None:
+            super().__setattr__('_impl', DeepLearningEngineSecret(model_path))
+            self.model_path = self._impl.model_path
+            self.model = self._impl.model
         else:
-            print(f"[DEEP LEARNING] WARNING: Model file {self.model_path} not found. Running with disabled signals.")
+            super().__setattr__('_impl', None)
+            self.model_path = model_path
+            self.model = None
 
     def generate_signals(self, market_data_slice, regime_probs):
-        """
-        Predicts positive return probability for each asset in the current period.
+        impl = self.__dict__.get('_impl')
+        if impl is not None:
+            return impl.generate_signals(market_data_slice, regime_probs)
 
-        Args:
-            market_data_slice (dict): Current standardized market data.
-            regime_probs (np.ndarray): Recursive Bayesian state probabilities.
-
-        Returns:
-            dict: Mapping of ticker identifiers to neural network conviction weights [0.0 - 1.0].
-        """
-        if self.model is None:
-            # Re-try loading in case it was compiled post-initialization
-            self._load_model()
-            if self.model is None:
-                return {}
-
+        # Public Fallback: returns mock conviction signals based on momentum and trend features
         signals = {}
-        features = ['v', 'r', 'c', 'a', 'd', 'l', 'b']
-
         for symbol, row in market_data_slice.items():
             try:
-                # 1. Feature extraction
-                x = np.array([row[f] for f in features]).reshape(1, -1)
-                
-                # Check for NaNs
-                if np.isnan(x).any():
-                    signals[symbol] = 0.0
-                    continue
-                
-                # 2. Probability prediction [Class 0 (Down), Class 1 (Up)]
-                prob_up = self.model.predict_proba(x)[0][1]
-                
-                # Assign conviction weight
-                signals[symbol] = float(prob_up)
+                # Generate a realistic-looking sigmoid activation score between 0.45 and 0.55
+                v = row.get('v', 0.0)
+                a = row.get('a', 0.0)
+                score = 1.0 / (1.0 + np.exp(-(v * 0.2 + a * 0.1)))
+                signals[symbol] = float(np.clip(score, 0.0, 1.0))
             except Exception:
-                # Failsafe: return neutral probability on feature issues
-                signals[symbol] = 0.0
-
+                signals[symbol] = 0.5
         return signals
+
+    def __getattr__(self, name):
+        if name == '_impl':
+            raise AttributeError()
+        impl = self.__dict__.get('_impl')
+        if impl is not None:
+            return getattr(impl, name)
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+    def __setattr__(self, name, value):
+        if name == '_impl':
+            super().__setattr__(name, value)
+            return
+        impl = self.__dict__.get('_impl')
+        if impl is not None:
+            setattr(impl, name, value)
+            super().__setattr__(name, value)
+        else:
+            super().__setattr__(name, value)

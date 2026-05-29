@@ -1,28 +1,32 @@
 """
 Aether Bayesian Kernel - Model Initialization Utility
-Synchronizes the 7-dimensional offline priors with the adaptive proprietary kernel.
+Public wrapper shell. If the proprietary initialization script is present locally, it is executed.
+Otherwise, it runs a baseline initialization logic.
 """
 
 import sys
 import os
-import yaml
-import joblib
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from src.brain.abmsm import ABMSM
-from src.research.regime_engine import RegimeDetectorV2
+try:
+    from scripts.init_proprietary_model_secret import main as run_secret
+except ImportError:
+    run_secret = None
 
 def main():
-    print("[KERNEL CONTROL] INITIALIZING 7-SENSE PROPRIETARY KERNEL...")
+    if run_secret is not None:
+        run_secret()
+        return
+
+    print("[KERNEL CONTROL] [IP PROTECTION] Proprietary model initialization is closed-source.")
+    print("[KERNEL CONTROL] Initializing dummy model configurations...")
+    
+    import yaml
+    import joblib
+    from src.brain.abmsm import ABMSM
     
     with open('config.yaml', 'r') as f:
         config = yaml.safe_load(f)
         
-    offline_detector = RegimeDetectorV2(config)
-    offline_detector.load()
-
-    # Kernel Instantiation (D=7)
     abmsm = ABMSM(
         K=config['regime_model']['n_components'],
         D=len(config['regime_model']['features']),
@@ -30,14 +34,10 @@ def main():
         lam=config['regime_model']['abmsm']['decay_factor']
     )
     
-    # Explicit 7-Dimensional Knowledge Transfer
-    abmsm.means = offline_detector.model.means_
-    abmsm.covs = offline_detector.model.covars_
-    abmsm.A = offline_detector.model.transmat_
-    
     save_path = config['regime_model']['abmsm']['save_path']
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
     joblib.dump(abmsm, save_path)
-    print(f"[KERNEL CONTROL] 7-SENSE KERNEL PERSISTED: {save_path}")
+    print(f"[KERNEL CONTROL] Dummy model saved to {save_path}")
 
 if __name__ == "__main__":
     main()

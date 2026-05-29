@@ -52,4 +52,4 @@ The mathematical algorithms and source code contained within the `src/brain` dir
 
 **Unauthorized distribution or reverse engineering is strictly prohibited.**
 
-For licensing inquiries or technical documentation: **chiragpatil07@gmail.com**
+For licensing inquiries or technical documentation: **your.email@example.com**
