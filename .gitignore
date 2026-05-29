@@ -21,7 +21,12 @@ models/
 reports/
 *.png
 *.pdf
+*.tex
 abk_model_paper.pdf
+abk_model_paper.tex
+abk_math_specifications.pdf
+abk_math_specifications.tex
+
 
 
 # --- SYSTEM ARTIFACTS ---
