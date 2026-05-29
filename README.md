@@ -19,20 +19,35 @@ Unlike static statistical models, ABK utilizes a proprietary **Adaptive Bayesian
 - **`src/engine/`**: Operational infrastructure including universal data loaders, currency-basis synchronization, and institutional risk management.
 - **`src/research/`**: Validation laboratory containing Monte Carlo path-randomization, cross-sectional ranking, and synthetic stress-test engines.
 - **`scripts/`**: Protocols for kernel initialization and global instinct training.
+- **`templates/`**: HTML/JS user interface mockups designed to resemble the Bloomberg Terminal.
+- **`dashboard_server.py`**: Lightweight HTTP backend server enabling historical backtests, real-time paper trading loops, and MLP network diagram visualizations.
 
-## IV. Operational Protocol
+## IV. Bloomberg Terminal Dashboard UI & Features
+The system includes a visual Bloomberg Terminal clone (`http://localhost:8080`) providing:
+1.  **Command Prompt Console Bar**: Type tickers and execution functions (e.g., `AAPL GP`, `ETERNAL.NS BT`, `ALLOC 150000`, `MONITOR`, `HELP`). Supports real-time ticker suggestions and arrow-key autocomplete dropdown navigation.
+2.  **ZOMATO Rebrand Redirection**: Automatically resolves old delisted Zomato symbols (`ZOMATO.NS`, `ZOMATO.BO`, `ZOMATO`) to their active rebranded counterparts (`ETERNAL.NS` / `ETERNAL.BO`, effective April 2025) and alerts the user in the command console feed.
+3.  **Lightweight Caching & Live-Patching**: Implements a 5-minute historical base cache and only requests the latest single real-time bar (`yf.Ticker.history(period="1d")`, <100ms) for target tickers on subsequent polls. Merges live ticks with cached history in-memory to prevent redundant yfinance downloads.
+4.  **1D / 5D Granular Timeframe Charts**: Timeframe selectors include `1D` and `5D` options, pulling high-density intraday data (`5m` intervals for 1D, `15m` intervals for 5D) to render detailed line charts.
+5.  **Merged Sliding Live Charts**: The live paper trading visualizer combines historical pre-loaded bars with real-time incoming ticks. Scales and scrolls smoothly from right to left using a moving window (80 to 500 points depending on the timeframe) to prevent graph compression.
+6.  **Dual Currency Support**: Formatting values dynamically transitions to Indian Rupees (`₹`) or United States Dollars (`$`) depending on the suffix of the target asset (`.NS` or `.BO` format).
+7.  **Browser Wall Clock**: Status bar clock updates dynamically every second using browser time.
+
+## V. Operational Protocol
 To execute an audit or initialize the kernel, utilize the following command structures:
 
 1.  **Environment Synchronization:**
     `pip install -r requirements.txt`
 2.  **Kernel Initialization:**
     `python scripts/train_instinct.py`
-3.  **Command Center Launch:**
+3.  **Bloomberg Dashboard Launch:**
+    `python dashboard_server.py`
+    *Navigate to `http://localhost:8080` in your web browser.*
+4.  **Command Center Launch (Headless CLI):**
     `python commander.py`
-4.  **Unit Testing Audit:**
+5.  **Unit Testing Audit:**
     `pytest`
 
-## V. Intellectual Property & Licensing
+## VI. Intellectual Property & Licensing
 The mathematical algorithms and source code contained within the `src/brain` directory are the exclusive **Intellectual Property** of Chirag P Patil. This repository is provided for institutional audit, validation, and proof-of-concept purposes only. 
 
 **Unauthorized distribution or reverse engineering is strictly prohibited.**
