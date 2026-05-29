@@ -19,11 +19,11 @@ Unlike static statistical models, ABK utilizes a proprietary **Adaptive Bayesian
 - **`src/engine/`**: Operational infrastructure including universal data loaders, currency-basis synchronization, and institutional risk management.
 - **`src/research/`**: Validation laboratory containing Monte Carlo path-randomization, cross-sectional ranking, and synthetic stress-test engines.
 - **`scripts/`**: Protocols for kernel initialization and global instinct training.
-- **`templates/`**: HTML/JS user interface mockups designed to resemble the Bloomberg Terminal.
+- **`templates/`**: HTML/JS user interface mockups designed to resemble an institutional-grade financial terminal.
 - **`dashboard_server.py`**: Lightweight HTTP backend server enabling historical backtests, real-time paper trading loops, and MLP network diagram visualizations.
 
-## IV. Bloomberg Terminal Dashboard UI & Features
-The system includes a visual Bloomberg Terminal clone (`http://localhost:8080`) providing:
+## IV. Interactive Financial Terminal UI & Features
+The system includes an interactive, professional financial terminal UI (`http://localhost:8080`) providing:
 1.  **Command Prompt Console Bar**: Type tickers and execution functions (e.g., `AAPL GP`, `ETERNAL.NS BT`, `ALLOC 150000`, `MONITOR`, `HELP`). Supports real-time ticker suggestions and arrow-key autocomplete dropdown navigation.
 2.  **ZOMATO Rebrand Redirection**: Automatically resolves old delisted Zomato symbols (`ZOMATO.NS`, `ZOMATO.BO`, `ZOMATO`) to their active rebranded counterparts (`ETERNAL.NS` / `ETERNAL.BO`, effective April 2025) and alerts the user in the command console feed.
 3.  **Lightweight Caching & Live-Patching**: Implements a 5-minute historical base cache and only requests the latest single real-time bar (`yf.Ticker.history(period="1d")`, <100ms) for target tickers on subsequent polls. Merges live ticks with cached history in-memory to prevent redundant yfinance downloads.
@@ -39,7 +39,7 @@ To execute an audit or initialize the kernel, utilize the following command stru
     `pip install -r requirements.txt`
 2.  **Kernel Initialization:**
     `python scripts/train_instinct.py`
-3.  **Bloomberg Dashboard Launch:**
+3.  **Terminal Dashboard Launch:**
     `python dashboard_server.py`
     *Navigate to `http://localhost:8080` in your web browser.*
 4.  **Command Center Launch (Headless CLI):**
