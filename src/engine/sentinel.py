@@ -23,7 +23,7 @@ class Sentinel:
         self.log_dir = log_dir
         os.makedirs(log_dir, exist_ok=True)
 
-    def log_decision(self, date, regime_probs, entropy, holdings):
+    def log_decision(self, date, regime_probs, entropy, holdings, equity=0.0):
         """
         Persists a high-fidelity snapshot of the kernel state to disk.
         
@@ -32,6 +32,7 @@ class Sentinel:
             regime_probs (np.ndarray): Vector of state probabilities.
             entropy (float): Normalized Shannon Entropy of the belief.
             holdings (dict): Current asset-level unit distribution.
+            equity (float): Current total portfolio equity valuation.
         """
         # Structured audit schema for forensic performance analysis
         audit_entry = {
@@ -39,7 +40,8 @@ class Sentinel:
             "dominant_regime": int(regime_probs.argmax()),
             "regime_confidence": float(regime_probs.max()),
             "entropy": float(entropy),
-            "holdings": {k: float(v) for k, v in holdings.items()}
+            "holdings": {k: float(v) for k, v in holdings.items()},
+            "equity": float(equity)
         }
         
         filename = f"{self.log_dir}/decision_audit.jsonl"

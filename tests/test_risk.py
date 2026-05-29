@@ -40,6 +40,7 @@ def test_risk_engine_math():
     print("\n[TEST] CASE 1: LOW-VOLATILITY REGIME (5% ANN)")
     print(f"Equity Basis: ${equity_basis:,.0f}")
     print(f"Risk Exposure Allocation: ${size_a:,.2f}")
+    assert size_a == 100000.0  # Capped at 1.0x equity
     
     # --- TEST CASE 2: HIGH-VOLATILITY DYNAMICS (ANNUAL 80%) ---
     # Expected: Sizing should aggressively contract to preserve the risk budget.
@@ -53,6 +54,7 @@ def test_risk_engine_math():
     
     print("\n[TEST] CASE 2: HIGH-VOLATILITY REGIME (80% ANN)")
     print(f"Risk Exposure Allocation: ${size_b:,.2f}")
+    assert abs(size_b - 15000.0) < 1e-6
     
     # --- TEST CASE 3: CAPITAL IMPAIRMENT FEEDBACK (-10% DRAWDOWN) ---
     # Expected: The deleveraging penalty should further reduce the calculated size.
@@ -67,7 +69,8 @@ def test_risk_engine_math():
     print("\n[TEST] CASE 3: DRAWDOWN FEEDBACK RESPONSE (-10% DD)")
     print(f"Standard Allocation (0% DD): ${risk_engine.calculate_position_size(equity_basis, vol_norm, 1.0, 0.0):,.2f}")
     print(f"Defensive Allocation (-10% DD): ${size_c:,.2f}")
-
+    assert abs(size_c - 48000.0) < 1e-6
+ 
     print("\n[TEST] RISK ENGINE ARCHITECTURAL AUDIT COMPLETE.")
 
 if __name__ == "__main__":

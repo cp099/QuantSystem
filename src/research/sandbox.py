@@ -18,6 +18,7 @@ from src.research.validator import StrategyValidator
 from src.engine.risk_manager import RiskManager
 from src.research.validator_pro import AdvancedValidator
 from src.research.sentinel_report import SentinelReport
+from src.engine.sentinel import Sentinel
 
 def run_universal_sandbox(ticker):
     """
@@ -54,6 +55,15 @@ def run_universal_sandbox(ticker):
     equity_local, cash_local, shares = initial_cap_local, initial_cap_local, 0.0
     hist_local, hist_usd, bench_hist = [], [], []
     
+    # Clear previous audit logs for fresh dashboard visualization
+    audit_file = "logs/audit/decision_audit.jsonl"
+    if os.path.exists(audit_file):
+        try:
+            os.remove(audit_file)
+        except Exception:
+            pass
+    sentinel = Sentinel()
+    
     features = ['v', 'r', 'c', 'a', 'd', 'l', 'b']
     peak_equity = initial_cap_local
     
@@ -82,24 +92,34 @@ def run_universal_sandbox(ticker):
         if i < 120: 
             signal = 0.0
         
-        # Adaptive Capital Allocation
+        # Get historical returns for Expected Shortfall calculation (SEC/SEBI institutional standard)
+        returns_hist = None
+        if i > 25:
+            returns_hist = df['Close'].iloc[max(0, i-100):i].pct_change().dropna().values
+
+        # Adaptive Capital Allocation with Expected Shortfall sizing
         target_value = risk_engine.calculate_position_size(
             current_val_local, 
             row['vol_pct'], 
             signal, 
-            current_dd
+            current_dd,
+            asset_returns=returns_hist
         )
         
-        # Rebalance Execution
+        # Rebalance Execution with Slippage and Brokerage Frictions
         target_shares = target_value / row['Close']
         shares_diff = target_shares - shares
-        cash_local -= (shares_diff * row['Close'])
+        trade_val = abs(shares_diff * row['Close'])
+        friction_cost = trade_val * (0.0005 + 0.05 * row['vol_pct'])
+        
+        cash_local -= (shares_diff * row['Close'] + friction_cost)
         shares = target_shares
             
         # Temporal State Persistence
         hist_local.append(current_val_local)
         hist_usd.append(current_val_local / row['FX_Rate'])
         bench_hist.append((bench_df.iloc[i]['Close'] / bench_df['Close'].iloc[0]) * initial_cap_local)
+        sentinel.log_decision(df.index[i], brain.pi, brain.get_entropy(), {ticker: shares}, equity=current_val_local)
 
     # --- PHASE III: PERFORMANCE ANALYTICS & REPORTING ---
     validator = StrategyValidator()

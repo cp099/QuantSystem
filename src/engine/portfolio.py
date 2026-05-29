@@ -7,6 +7,7 @@ based on recursive Bayesian state belief and systemic risk concentration.
 import pandas as pd
 import numpy as np
 import yaml
+from scipy.optimize import minimize
 
 class CapitalAllocator:
     """
@@ -46,7 +47,7 @@ class CapitalAllocator:
                 return 1.0
             
             # Sanitization: Ensure data is numerically stable for decomposition
-            clean_df = history_df.dropna().loc[:, (history_df.std() > 0)]
+            clean_df = history_df.ffill().bfill().dropna().loc[:, (history_df.std() > 0)]
             if clean_df.shape[1] < 2: 
                 return 1.0
 
@@ -83,9 +84,10 @@ class CapitalAllocator:
         p_chop = regime_probs[1] + regime_probs[2]
         
         engine_weights = {
-            "Trend_Engine": p_bull * 0.5,
-            "Relative_Strength": p_bull * 0.5,
-            "Mean_Reversion": p_chop * 0.8,
+            "Trend_Engine": p_bull * 0.4,
+            "Relative_Strength": p_bull * 0.3,
+            "Deep_Learning": p_bull * 0.3 + p_chop * 0.3,
+            "Mean_Reversion": p_chop * 0.5,
             "Vol_Breakout": p_chop * 0.2
         }
         
@@ -103,9 +105,45 @@ class CapitalAllocator:
                 for asset, weight in sigs.items():
                     raw_asset_weights[asset] = raw_asset_weights.get(asset, 0.0) + (weight / total_sig * budget)
         
-        # --- STAGE III: SYSTEMIC RISK PENALTY ---
+        # --- STAGE III: SYSTEMIC RISK PENALTY & BAYESIAN OPTIMIZATION ---
         penalty = self.calculate_correlation_penalty(history_df)
         
-        # Final weights adjusted for risk concentration
+        active_assets = [asset for asset, weight in raw_asset_weights.items() if weight > 0]
+        
+        if history_df is not None and len(active_assets) >= 2:
+            try:
+                # Align historical returns for active assets
+                clean_df = history_df[active_assets].ffill().bfill().dropna()
+                
+                if len(clean_df) > 5 and clean_df.shape[1] == len(active_assets):
+                    Sigma = clean_df.cov().values
+                    
+                    if not np.isnan(Sigma).any():
+                        N = len(active_assets)
+                        u_arr = np.array([raw_asset_weights[a] for a in active_assets])
+                        
+                        # Optimization: maximize utility - lambda/2 * w.T * Sigma * w
+                        lam = 1.5  # Risk aversion
+                        total_budget = sum(raw_asset_weights.values())
+                        
+                        def loss(w):
+                            return - (np.dot(w, u_arr) - 0.5 * lam * np.dot(w, np.dot(Sigma, w)))
+                        
+                        cons = ({'type': 'ineq', 'fun': lambda w: total_budget - np.sum(w)})
+                        bounds = [(0.0, total_budget) for _ in range(N)]
+                        w0 = np.ones(N) * (total_budget / N)
+                        
+                        res = minimize(loss, w0, bounds=bounds, constraints=cons, method='SLSQP')
+                        if res.success:
+                            opt_allocs = {active_assets[i]: float(res.x[i]) for i in range(N)}
+                            for k in raw_asset_weights.keys():
+                                if k not in opt_allocs:
+                                    opt_allocs[k] = 0.0
+                            self.allocations = {k: v * penalty for k, v in opt_allocs.items()}
+                            return self.allocations
+            except Exception as e:
+                print(f"[PORTFOLIO OPTIMIZER] Optimization failed: {e}")
+                
+        # Default fallback (backward-compatible)
         self.allocations = {k: v * penalty for k, v in raw_asset_weights.items()}
         return self.allocations
