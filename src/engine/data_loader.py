@@ -15,6 +15,8 @@ class UniversalLoader:
     Handles currency synchronization, benchmark alignment, and robust 
     scaling to ensure mathematical scale-invariance across global markets.
     """
+    _base_cache = {}
+    _cache_expiry = 300
 
     def get_market_context(self, ticker):
         """
@@ -22,14 +24,23 @@ class UniversalLoader:
         """
         if ticker.endswith(".NS") or ticker.endswith(".BO"):
             return "^NSEI", "INR", "USDINR=X", ["RELIANCE.NS", "SBIN.NS", "TCS.NS"]
+        elif ticker.endswith("=X"):
+            # Forex ticker: benchmark DX-Y.NYB (USD Index), ccy matches quote
+            ccy = ticker[3:6] if len(ticker) >= 6 else "USD"
+            return "DX-Y.NYB", ccy, None, ["EURUSD=X", "GBPUSD=X", "USDJPY=X"]
+        elif ticker.endswith("-USD"):
+            # Crypto ticker: benchmark BTC-USD, ccy USD
+            return "BTC-USD", "USD", None, ["BTC-USD", "ETH-USD", "SOL-USD"]
+        # Default: US Equity Market (NYSE/NASDAQ)
         return "SPY", "USD", None, ["AAPL", "MSFT", "NVDA"]
 
-    def fetch_and_engineer(self, ticker):
+    def fetch_and_engineer(self, ticker, period="7y"):
         """
         Inhales raw market data and executes the state-space transformation.
         
         Args:
             ticker (str): Global market identifier.
+            period (str): Download time-frame period.
             
         Returns:
             tuple: (Standardized DataFrame, Benchmark DataFrame, Currency String)
@@ -37,12 +48,32 @@ class UniversalLoader:
         bench, local_ccy, fx_ticker, breadth_basket = self.get_market_context(ticker)
         print(f"[DATA KERNEL] SYNCHRONIZING STATE-SPACE: {ticker}")
         
-        all_tickers = [ticker, bench, "^TNX", "^IRX"] + breadth_basket
+        raw_list = [ticker, bench, "^TNX", "^IRX"] + breadth_basket
         if fx_ticker: 
-            all_tickers.append(fx_ticker)
+            raw_list.append(fx_ticker)
+        all_tickers = list(dict.fromkeys(raw_list))
         
-        # High-capacity lookback to populate normalization windows
-        data = yf.download(all_tickers, period="7y", auto_adjust=True, progress=False)
+        # High-capacity lookback to populate normalization windows with 5-min base cache + live patching
+        import time
+        cache_key = (tuple(sorted(all_tickers)), period)
+        now = time.time()
+        
+        if cache_key in self._base_cache and (now - self._base_cache[cache_key]['time']) < self._cache_expiry:
+            data = self._base_cache[cache_key]['data'].copy()
+            # Fetch ONLY the target ticker's latest real-time bar to patch the cache
+            try:
+                latest_tick = yf.Ticker(ticker).history(period="1d")
+                if not latest_tick.empty:
+                    latest_date = latest_tick.index[-1]
+                    for col in latest_tick.columns:
+                        if (col, ticker) in data.columns:
+                            data.loc[latest_date, (col, ticker)] = latest_tick.loc[latest_date, col]
+                    data = data.ffill()
+            except Exception as patch_err:
+                print(f"[DATA KERNEL WARNING] Failed to patch latest tick for {ticker}: {patch_err}")
+        else:
+            data = yf.download(all_tickers, period=period, auto_adjust=True, progress=False)
+            self._base_cache[cache_key] = {'time': now, 'data': data}
         
         def get_df(t): 
             return data.xs(t, axis=1, level=1).ffill().bfill()
@@ -100,4 +131,9 @@ class UniversalLoader:
         # Currency Basis Synchronization
         df['FX_Rate'] = get_df(fx_ticker)['Close'].reindex(df.index).ffill() if fx_ticker else 1.0
             
+        # Strategy Compatibility Mappings
+        df['Momentum'] = returns.rolling(20).sum()
+        df['Vol_ratio'] = returns.rolling(20).std() / (returns.rolling(100).std() + 1e-6)
+        df['Normalized_return'] = df['v']
+
         return df.dropna(), df_bench.reindex(df.index).ffill(), local_ccy
