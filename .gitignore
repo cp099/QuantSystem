@@ -35,6 +35,11 @@ scripts/train_instinct_secret.py
 scripts/train_regime_model_v2_secret.py
 scripts/init_proprietary_model_secret.py
 
+# --- LOGS & RUNTIME ---
+logs/*.log
+*.log
+
+
 
 
 
