@@ -1,0 +1,2181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AETHER SYSTEM TERMINAL - ABK v3.5.0</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --panel-bg: #050505;
+            --cmd-bg: #00003f;
+            --cmd-text: #ffff00;
+            --border-color: #ff9900;
+            --border-dim: #1e1e1e;
+            --border-med: #333333;
+            --border-high: #555555;
+            --text-primary: #ff9900;
+            --text-secondary: #00ff66;
+            --text-neutral: #ffffff;
+            --text-dim: #888888;
+            --alert-color: #ff3b30;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-neutral);
+            font-family: 'Fira Code', monospace;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Bloomberg Terminal Command Bar at the top */
+        .cmd-bar-wrapper {
+            background-color: var(--cmd-bg);
+            border-bottom: 2px solid var(--border-color);
+            height: 42px;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            z-index: 200;
+            position: relative;
+        }
+
+        .cmd-prompt {
+            color: var(--text-secondary);
+            font-family: 'Share Tech Mono', monospace;
+            font-weight: bold;
+            font-size: 15px;
+            margin-right: 8px;
+            user-select: none;
+        }
+
+        .cmd-input {
+            background-color: transparent;
+            border: none;
+            color: var(--cmd-text);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 16px;
+            letter-spacing: 1px;
+            width: 100%;
+            outline: none;
+        }
+
+        .cmd-input::placeholder {
+            color: rgba(255, 255, 0, 0.25);
+        }
+
+        .cmd-info-badge {
+            background-color: #ff9900;
+            color: #000000;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 2px;
+            white-space: nowrap;
+            margin-left: 12px;
+            cursor: pointer;
+        }
+
+        /* Auto-suggestions float dropdown box */
+        .suggestions-box {
+            display: none;
+            position: absolute;
+            top: 42px;
+            left: 80px;
+            background-color: #080808;
+            border: 1px solid var(--border-color);
+            max-height: 250px;
+            overflow-y: auto;
+            min-width: 280px;
+            z-index: 1000;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8);
+        }
+
+        .suggestion-item {
+            padding: 6px 12px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 13px;
+            color: var(--cmd-text);
+            cursor: pointer;
+            border-bottom: 1px solid #111;
+        }
+
+        .suggestion-item:hover, .suggestion-item.active {
+            background-color: var(--text-primary);
+            color: #000000;
+            font-weight: bold;
+        }
+
+        /* Menus Tabs bar */
+        .bb-tabs {
+            background-color: #0d0d0d;
+            border-bottom: 1px solid var(--border-dim);
+            height: 34px;
+            display: flex;
+            padding: 0 12px;
+            align-items: flex-end;
+        }
+
+        .bb-tab {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px;
+            color: var(--text-dim);
+            padding: 6px 16px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            user-select: none;
+            transition: all 0.15s;
+        }
+
+        .bb-tab:hover {
+            color: var(--text-primary);
+            background-color: #050505;
+        }
+
+        .bb-tab.active {
+            color: var(--text-primary);
+            background-color: var(--panel-bg);
+            border-color: var(--border-dim);
+            font-weight: bold;
+        }
+
+        /* Sub-status Info bar */
+        .bb-status-row {
+            background-color: #080808;
+            border-bottom: 1px solid var(--border-dim);
+            height: 28px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 16px;
+            font-size: 11px;
+            font-family: 'Share Tech Mono', monospace;
+            color: var(--text-dim);
+        }
+
+        .bb-status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--text-secondary);
+            border-radius: 50%;
+            box-shadow: 0 0 6px var(--text-secondary);
+        }
+
+        .status-dot.offline {
+            background-color: var(--alert-color);
+            box-shadow: 0 0 6px var(--alert-color);
+        }
+
+        .status-dot.running {
+            background-color: #ffcc00;
+            box-shadow: 0 0 6px #ffcc00;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+
+        /* Workspace View Tab Panels */
+        .tab-view {
+            display: none;
+            height: calc(100vh - 104px);
+            background-color: var(--bg-color);
+        }
+
+        .tab-view.active {
+            display: grid;
+        }
+
+        .backtest-layout {
+            grid-template-columns: 280px 1fr 360px;
+        }
+
+        .live-layout {
+            grid-template-columns: 280px 1fr 360px;
+        }
+
+        .nn-layout {
+            grid-template-columns: 1fr;
+        }
+
+        /* Sub-Panels */
+        .panel {
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border-dim);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel:last-child {
+            border-right: none;
+        }
+
+        .panel-header {
+            background-color: #0c0c0c;
+            border-bottom: 1px solid var(--border-med);
+            padding: 8px 12px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 13px;
+            color: var(--text-primary);
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-content {
+            padding: 12px;
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* Custom Box styling */
+        .param-box {
+            border: 1px solid var(--border-dim);
+            padding: 10px;
+            background-color: rgba(3, 3, 3, 0.7);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .param-label {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+
+        .param-value {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 14px;
+            color: var(--text-neutral);
+        }
+
+        /* Timeframe Button Selectors */
+        .tf-button-group {
+            display: flex;
+            gap: 4px;
+        }
+
+        .tf-btn {
+            background-color: #111111;
+            border: 1px solid var(--border-dim);
+            color: var(--text-dim);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            padding: 2px 8px;
+            cursor: pointer;
+            outline: none;
+            border-radius: 2px;
+        }
+
+        .tf-btn:hover, .tf-btn.active {
+            border-color: var(--border-color);
+            color: var(--border-color);
+            background-color: rgba(255, 153, 0, 0.15);
+        }
+
+        /* Compliance Light indicators */
+        .compliance-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .compliance-card {
+            border: 1px solid var(--border-dim);
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            background-color: #080808;
+        }
+
+        .light {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background-color: #222222;
+            border: 2px solid #333333;
+        }
+
+        .light.green {
+            background-color: var(--text-secondary);
+            border-color: #008833;
+            box-shadow: 0 0 8px var(--text-secondary);
+        }
+
+        .light.red {
+            background-color: var(--alert-color);
+            border-color: #880000;
+            box-shadow: 0 0 8px var(--alert-color);
+        }
+
+        .light.orange {
+            background-color: #ff9900;
+            border-color: #aa6600;
+            box-shadow: 0 0 8px #ff9900;
+        }
+
+        /* Table structures */
+        .table-wrapper {
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        table.retro-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            text-align: left;
+        }
+
+        table.retro-table th {
+            background-color: #0f0f0f;
+            border-bottom: 1px solid var(--border-med);
+            color: var(--text-dim);
+            padding: 6px 8px;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            text-transform: uppercase;
+        }
+
+        table.retro-table td {
+            padding: 4px 8px;
+            border-bottom: 1px solid #111111;
+        }
+
+        table.retro-table tr:hover {
+            background-color: #0f0c05;
+        }
+
+        /* Metrics Display panel */
+        .metric-ribbon {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+        }
+
+        .metric-card {
+            border: 1px solid var(--border-dim);
+            background-color: #060606;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 50px;
+        }
+
+        .metric-title {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            text-align: center;
+        }
+
+        .metric-val {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 15px;
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+
+        .metric-val.green { color: var(--text-secondary); }
+        .metric-val.red { color: var(--alert-color); }
+
+        /* Chart Canvas wrapper grids */
+        .chart-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-height: 0;
+        }
+
+        .chart-box {
+            border: 1px solid var(--border-dim);
+            background-color: #030303;
+            padding: 8px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+
+        /* Console styling */
+        .console-feed {
+            background-color: #000000;
+            color: var(--text-secondary);
+            font-family: 'Fira Code', monospace;
+            font-size: 9px;
+            padding: 10px;
+            overflow-y: auto;
+            flex: 1;
+            white-space: pre-wrap;
+            line-height: 1.4;
+            border-top: 1px solid var(--border-dim);
+        }
+
+        /* Floating Command Directory Overlay modal */
+        .help-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 500;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .help-content {
+            background-color: #080808;
+            border: 2px solid var(--border-color);
+            padding: 24px;
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+            color: var(--text-secondary);
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 0 25px rgba(255, 153, 0, 0.45);
+        }
+
+        .help-header {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 16px;
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+
+        /* Latent HMM meters */
+        .regime-bar-row {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .regime-bar-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            font-family: 'Share Tech Mono', monospace;
+        }
+
+        .regime-track {
+            background-color: #121212;
+            height: 6px;
+            width: 100%;
+            border-radius: 1px;
+            overflow: hidden;
+            border: 1px solid #222222;
+        }
+
+        .regime-fill {
+            background-color: var(--text-primary);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        /* Neural net layers panels */
+        .nn-visualizer-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            background-color: #020202;
+            border: 1px solid var(--border-dim);
+        }
+
+        .nn-canvas-box {
+            flex: 1;
+            position: relative;
+        }
+
+        .nn-stats-panel {
+            width: 320px;
+            border-left: 1px solid var(--border-dim);
+            background-color: #060606;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            overflow-y: auto;
+        }
+
+        /* Highlight classes */
+        .market-closed-status {
+            color: var(--alert-color);
+            font-weight: bold;
+            animation: pulse 1s infinite;
+        }
+
+        .market-open-status {
+            color: var(--text-secondary);
+            font-weight: bold;
+        }
+
+        /* Scrollbars custom styling */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track { background: #000000; }
+        ::-webkit-scrollbar-thumb { background: #333333; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-color); }
+    </style>
+</head>
+<body>
+
+    <!-- Bloomberg Command Prompt bar -->
+    <div class="cmd-bar-wrapper">
+        <span class="cmd-prompt">AETHER:</span>
+        <input type="text" class="cmd-input" id="terminal-cmd-input" placeholder="Type Ticker (e.g. AAPL) or command (e.g. MON, BT, ALLOC 50000)... [ESC for Help]" autofocus autocomplete="off">
+        <span class="cmd-info-badge" onclick="toggleHelp(true)">DIRECTORY (ESC)</span>
+        
+        <!-- Autocomplete Suggestions List -->
+        <div class="suggestions-box" id="cmd-suggestions"></div>
+    </div>
+
+    <!-- menu tabs -->
+    <div class="bb-tabs">
+        <div class="bb-tab active" id="tab-btn-backtest" onclick="switchTab(1)">1) HISTORICAL BACKTEST</div>
+        <div class="bb-tab" id="tab-btn-live" onclick="switchTab(2)">2) LIVE PAPER MONITOR</div>
+        <div class="bb-tab" id="tab-btn-visualizer" onclick="switchTab(3)">3) NEURAL NET VISUALIZER</div>
+    </div>
+
+    <!-- Bloomberg Status panel -->
+    <div class="bb-status-row">
+        <div class="bb-status-item">
+            <span>ACTIVE SECURITY:</span>
+            <span style="color: var(--text-neutral); font-weight: bold;" id="status-ticker">AAPL</span>
+        </div>
+        <div class="bb-status-item">
+            <span>BACKTEST:</span>
+            <span class="status-dot" id="engine-dot-backtest"></span>
+            <span class="status-val" id="engine-text-backtest">READY</span>
+        </div>
+        <div class="bb-status-item">
+            <span>LIVE OBSERVATION:</span>
+            <span class="status-dot offline" id="engine-dot-live"></span>
+            <span class="status-val" id="engine-text-live">INACTIVE</span>
+        </div>
+        <div class="bb-status-item">
+            <span>MARKET STATE:</span>
+            <span id="market-status-badge" class="market-open-status">CHECKING DATA...</span>
+        </div>
+        <div class="bb-status-item">
+            <span>API SERVER:</span>
+            <span class="status-dot" id="server-dot"></span>
+            <span id="server-text">CONNECTED</span>
+        </div>
+        <div class="bb-status-item" style="color: var(--text-primary);" id="live-clock">
+            2026-05-29 09:59:11
+        </div>
+    </div>
+
+    <!-- VIEW 1: HISTORICAL BACKTEST -->
+    <div class="tab-view active backtest-layout" id="view-backtest">
+        <!-- Parameters (Left) -->
+        <div class="panel">
+            <div class="panel-header"><span>Backtest Parameters</span></div>
+            <div class="panel-content">
+                <div class="param-box">
+                    <span class="param-label">Execution Mode</span>
+                    <span class="param-value" id="bt-mode-label">SINGLE SECURITY SANDBOX</span>
+                </div>
+                <div class="param-box">
+                    <span class="param-label">Target Asset</span>
+                    <span class="param-value" id="bt-asset-label">AAPL</span>
+                </div>
+                <div class="param-box">
+                    <span class="param-label">Starting Capital</span>
+                    <span class="param-value" id="bt-allocation-label">$100,000.00 USD</span>
+                </div>
+                <div class="param-box">
+                    <span class="param-label">Trading Frictions</span>
+                    <span class="param-value" style="font-size: 11px;">5 bps Brokerage + Slippage (5% Volatility)</span>
+                </div>
+
+                <div class="param-box">
+                    <span class="param-label">HMM Latent State Probability</span>
+                    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
+                        <div class="regime-bar-row">
+                            <div class="regime-bar-info"><span>Regime 0 (Growth)</span><span id="bt-r0">0%</span></div>
+                            <div class="regime-track"><div class="regime-fill" id="bt-r0-bar"></div></div>
+                        </div>
+                        <div class="regime-bar-row">
+                            <div class="regime-bar-info"><span>Regime 1 (High-Rev)</span><span id="bt-r1">0%</span></div>
+                            <div class="regime-track"><div class="regime-fill" id="bt-r1-bar"></div></div>
+                        </div>
+                        <div class="regime-bar-row">
+                            <div class="regime-bar-info"><span>Regime 2 (Mean-Rev)</span><span id="bt-r2">0%</span></div>
+                            <div class="regime-track"><div class="regime-fill" id="bt-r2-bar"></div></div>
+                        </div>
+                        <div class="regime-bar-row">
+                            <div class="regime-bar-info"><span>Regime 3 (Breakout)</span><span id="bt-r3">0%</span></div>
+                            <div class="regime-track"><div class="regime-fill" id="bt-r3-bar"></div></div>
+                        </div>
+                        <div class="regime-bar-row">
+                            <div class="regime-bar-info"><span>Regime 4 (Sideways)</span><span id="bt-r4">0%</span></div>
+                            <div class="regime-track"><div class="regime-fill" id="bt-r4-bar"></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts (Center) -->
+        <div class="panel">
+            <div class="panel-header">
+                <span>Attribution Dashboard</span>
+                
+                <!-- Timeframe Selectors for Backtests -->
+                <div class="tf-button-group" id="bt-timeframe-selectors">
+                    <button class="tf-btn" onclick="changeBtTimeframe('1d')">1D</button>
+                    <button class="tf-btn" onclick="changeBtTimeframe('5d')">5D</button>
+                    <button class="tf-btn" onclick="changeBtTimeframe('1mo')">1M</button>
+                    <button class="tf-btn" onclick="changeBtTimeframe('3mo')">3M</button>
+                    <button class="tf-btn" onclick="changeBtTimeframe('1y')">1Y</button>
+                    <button class="tf-btn active" onclick="changeBtTimeframe('max')">ALL</button>
+                </div>
+            </div>
+            <div class="panel-content">
+                <div class="metric-ribbon">
+                    <div class="metric-card">
+                        <span class="metric-title">Total Return</span>
+                        <span class="metric-val" id="bt-stat-return">--</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-title">Max Drawdown</span>
+                        <span class="metric-val red" id="bt-stat-maxdd">--</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-title">Sharpe Ratio</span>
+                        <span class="metric-val" id="bt-stat-sharpe">--</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-title">Regime Entropy</span>
+                        <span class="metric-val" id="bt-stat-entropy">--</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-title">Final Liquidation</span>
+                        <span class="metric-val" id="bt-stat-liq" style="font-size: 11px;">--</span>
+                    </div>
+                </div>
+
+                <div class="chart-wrapper">
+                    <div class="chart-box">
+                        <div class="param-label">EQUITY GROWTH PROFILE (CURRENCY AXIS)</div>
+                        <div class="canvas-container">
+                            <canvas id="bt-equity-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-box" style="flex: 0.5;">
+                        <div class="param-label">MAXIMUM DRAWDOWN EROSION (%)</div>
+                        <div class="canvas-container">
+                            <canvas id="bt-drawdown-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal Streams (Right) -->
+        <div class="panel">
+            <div class="panel-header"><span>Execution Logs</span></div>
+            <div class="console-box" style="flex: 1.5;">
+                <div class="console-feed" id="bt-console">TERMINAL STANDBY. TYPE '<TICKER> BT' OR 'BT' IN COMMAND BAR TO RUN.</div>
+            </div>
+            <div class="table-box" style="flex: 1;">
+                <div class="panel-header" style="font-size: 10px; background-color: #0b0b0b;"><span>Decision Audit Trail</span></div>
+                <div class="table-wrapper">
+                    <table class="retro-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Regime</th>
+                                <th>Conf</th>
+                                <th>Entropy</th>
+                                <th>Equity</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bt-table-body">
+                            <tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 16px;">No backtest data.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 2: LIVE PAPER MONITOR -->
+    <div class="tab-view live-layout" id="view-live">
+        <!-- Live status panel (Left) -->
+        <div class="panel">
+            <div class="panel-header"><span>Live Paper Account</span></div>
+            <div class="panel-content">
+                <div class="param-box">
+                    <span class="param-label">Total Allocated Fund</span>
+                    <span class="param-value" id="live-allocated-pool" style="color: var(--text-primary); font-weight: bold;">$100,000.00</span>
+                </div>
+                <div class="param-box">
+                    <span class="param-label">Available Cash</span>
+                    <span class="param-value" id="live-cash-val">$100,000.00</span>
+                </div>
+                <div class="param-box">
+                    <span class="param-label">Current Asset Position</span>
+                    <span class="param-value" id="live-shares-val">0.00 Units</span>
+                </div>
+                <div class="param-box">
+                    <span class="param-label">Total Portfolio Equity</span>
+                    <span class="param-value" id="live-equity-val" style="color: var(--text-secondary); font-weight: bold;">$100,000.00</span>
+                </div>
+
+                <!-- Compliance indicators -->
+                <div class="param-box">
+                    <span class="param-label">Pre-Trade Compliance Gateway</span>
+                    <div class="compliance-grid" style="margin-top: 6px;">
+                        <div class="compliance-card">
+                            <div class="light green" id="live-comp-sec"></div>
+                            <span class="param-label" style="font-size: 8px;">SEC 15c3-5</span>
+                        </div>
+                        <div class="compliance-card">
+                            <div class="light green" id="live-comp-otr"></div>
+                            <span class="param-label" style="font-size: 8px;">SEBI OTR</span>
+                        </div>
+                        <div class="compliance-card">
+                            <div class="light green" id="live-comp-sebi"></div>
+                            <span class="param-label" style="font-size: 8px;">SEBI Conc Cap</span>
+                        </div>
+                        <div class="compliance-card">
+                            <div class="light green" id="live-comp-circuit"></div>
+                            <span class="param-label" style="font-size: 8px;">Circuit limit</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="param-box">
+                    <span class="param-label">Real-Time Feature Coordinates</span>
+                    <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 9px; margin-top: 4px;">
+                        <div><div class="param-label">v</div><div id="live-feat-v" style="color:#ffffff;">-</div></div>
+                        <div><div class="param-label">r</div><div id="live-feat-r" style="color:#ffffff;">-</div></div>
+                        <div><div class="param-label">c</div><div id="live-feat-c" style="color:#ffffff;">-</div></div>
+                        <div><div class="param-label">a</div><div id="live-feat-a" style="color:#ffffff;">-</div></div>
+                        <div><div class="param-label">d</div><div id="live-feat-d" style="color:#ffffff;">-</div></div>
+                        <div><div class="param-label">l</div><div id="live-feat-l" style="color:#ffffff;">-</div></div>
+                        <div><div class="param-label">b</div><div id="live-feat-b" style="color:#ffffff;">-</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Price Chart & Equity (Center) -->
+        <div class="panel">
+            <div class="panel-header">
+                <span>Real-Time Market Observation Chart</span>
+                
+                <!-- Timeframe Selectors for Live Pre-load -->
+                <div class="tf-button-group" id="live-timeframe-selectors">
+                    <button class="tf-btn" onclick="changeLiveTimeframe('1d')">1D</button>
+                    <button class="tf-btn" onclick="changeLiveTimeframe('5d')">5D</button>
+                    <button class="tf-btn active" onclick="changeLiveTimeframe('1mo')">1M</button>
+                    <button class="tf-btn" onclick="changeLiveTimeframe('3mo')">3M</button>
+                    <button class="tf-btn" onclick="changeLiveTimeframe('1y')">1Y</button>
+                    <button class="tf-btn" onclick="changeLiveTimeframe('max')">MAX</button>
+                </div>
+            </div>
+            <div class="panel-content">
+                <div class="metric-ribbon">
+                    <div class="metric-card">
+                        <span class="metric-title">Live Last Price</span>
+                        <span class="metric-val" id="live-stat-price">--</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-title">MLP Conviction</span>
+                        <span class="metric-val" id="live-stat-mlp">--</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-title">Live HMM Regime</span>
+                        <span class="metric-val" id="live-stat-regime">--</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-title">Regime Entropy</span>
+                        <span class="metric-val" id="live-stat-entropy">--</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-title">Live Paper Return</span>
+                        <span class="metric-val" id="live-stat-return">0.00%</span>
+                    </div>
+                </div>
+
+                <div class="chart-wrapper">
+                    <div class="chart-box">
+                        <div class="param-label" id="live-chart-ticker">ASSET PRICE INTERVAL STREAMS & TRANSACTION MARKERS</div>
+                        <div class="canvas-container">
+                            <canvas id="live-price-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-box" style="flex: 0.5;">
+                        <div class="param-label">PORTFOLIO VALUATION GROWTH PROFILE</div>
+                        <div class="canvas-container">
+                            <canvas id="live-equity-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logging (Right) -->
+        <div class="panel">
+            <div class="panel-header"><span>Intraday Diagnostic Feed</span></div>
+            <div class="console-box" style="flex: 1.5;">
+                <div class="console-feed" id="live-console">LIVE MONITOR INACTIVE. TYPE 'MONITOR' OR 'MON' IN COMMAND BAR TO RUN.</div>
+            </div>
+            <div class="table-box" style="flex: 1;">
+                <div class="panel-header" style="font-size: 10px; background-color: #0b0b0b;"><span>Execution Signal Logs</span></div>
+                <div class="table-wrapper">
+                    <table class="retro-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Price</th>
+                                <th>MLP Conv</th>
+                                <th>Signal</th>
+                                <th>Holdings</th>
+                            </tr>
+                        </thead>
+                        <tbody id="live-table-body">
+                            <tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 16px;">Waiting for live loop start.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 3: NEURAL NET VISUALIZER -->
+    <div class="tab-view nn-layout" id="view-visualizer">
+        <div class="nn-visualizer-container">
+            <div class="nn-canvas-box">
+                <canvas id="nn-canvas" style="position: absolute; top:0; left:0; width:100%; height:100%;"></canvas>
+            </div>
+            <div class="nn-stats-panel">
+                <div class="panel-header" style="background-color:transparent; padding:0; border:none;">
+                    <span>MLP Weights Dynamics</span>
+                </div>
+                <div class="param-box">
+                    <span class="param-label">Network Architecture</span>
+                    <span class="param-value" style="font-size: 12px;">7 Input Nodes<br>Layer 1: 32 Nodes (ReLU)<br>Layer 2: 16 Nodes (ReLU)<br>Output: 1 Output Node (Sigmoid)</span>
+                </div>
+                <div class="param-box">
+                    <span class="param-label">Active Connection Weights</span>
+                    <span class="param-value" style="font-size: 11px;">Line Green = Positive connection (+)<br>Line Red = Negative connection (-)<br>Opacity = Weight strength magnitude<br>Nodes light up according to calculated feedforward activation values</span>
+                </div>
+                <div class="param-box">
+                    <span class="param-label">Synaptic Activations</span>
+                    <span class="param-value" id="nn-active-summary" style="font-size: 11px; font-family:'Fira Code', monospace; line-height: 1.5;">Waiting for live inputs. Hover over inputs or run live monitors to populate.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Commands Directory Overlay modal -->
+    <div class="help-overlay" id="terminal-help-modal">
+        <div class="help-content">
+            <div class="help-header">Aether Command Console Directory</div>
+            <table style="width: 100%; text-align: left; font-family: monospace; font-size: 11px; border-collapse: collapse;">
+                <tr style="border-bottom: 1px solid #222;"><th style="padding: 4px; color: var(--text-primary);">Command</th><th style="padding: 4px; color: var(--text-primary);">Execution Outcome</th></tr>
+                <tr><td style="padding: 4px; color:#ffffff;">&lt;TICKER&gt;</td><td style="padding: 4px;">Validates and loads active security (e.g. RELIANCE.NS, BTC-USD)</td></tr>
+                <tr><td style="padding: 4px; color:#ffffff;">&lt;TICKER&gt; GP</td><td style="padding: 4px;">Sets active ticker and loads its Live Monitor Graph</td></tr>
+                <tr><td style="padding: 4px; color:#ffffff;">&lt;TICKER&gt; BT</td><td style="padding: 4px;">Sets active ticker and runs the Historical Backtest</td></tr>
+                <tr><td style="padding: 4px; color:#ffffff;">BT | BACKTEST</td><td style="padding: 4px;">Run historical backtest sandbox on currently active ticker</td></tr>
+                <tr><td style="padding: 4px; color:#ffffff;">MON | MONITOR</td><td style="padding: 4px;">Run live observation monitor loop on active ticker</td></tr>
+                <tr><td style="padding: 4px; color:#ffffff;">STOP | HALT</td><td style="padding: 4px;">Kill currently running backtest or live monitoring loop</td></tr>
+                <tr><td style="padding: 4px; color:#ffffff;">ALLOC &lt;amount&gt;</td><td style="padding: 4px;">Allocates specific capital pool for trading (e.g. ALLOC 250000)</td></tr>
+                <tr><td style="padding: 4px; color:#ffffff;">VIS | NET | NN</td><td style="padding: 4px;">Switch display view to the Neural Network Visualizer tab</td></tr>
+                <tr><td style="padding: 4px; color:#ffffff;">1 | 2 | 3</td><td style="padding: 4px;">Switch tabs: 1) Backtest, 2) Live Monitor, 3) Visualizer</td></tr>
+                <tr><td style="padding: 4px; color:#ffffff;">HELP | ?</td><td style="padding: 4px;">Display this command directory menu overlay</td></tr>
+            </table>
+            <div style="margin-top: 18px; text-align: right;">
+                <button onclick="toggleHelp(false)" style="background-color: var(--text-primary); color:#000000; border:none; padding: 4px 12px; font-family:'Share Tech Mono', monospace; font-weight:bold; cursor:pointer;">CLOSE (ESC)</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Known universe tickers list for auto-suggestions (Includes rebranded ETERNAL.NS/ETERNAL.BO)
+        const SECTOR_TICKERS = [
+            "HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "AXISBANK.NS", "KOTAKBANK.NS",
+            "TCS.NS", "INFY.NS", "WIPRO.NS", "HCLTECH.NS", "TECHM.NS",
+            "TATAMOTORS.NS", "M&M.NS", "MARUTI.NS", "BAJAJ-AUTO.NS",
+            "RELIANCE.NS", "ITC.NS", "HINDUNILVR.NS", "LT.NS",
+            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA",
+            "JPM", "BAC", "GS", "MS", "V",
+            "XOM", "CVX", "SLB", "COP",
+            "AMD", "INTC", "TSM", "AVGO", "ASML",
+            "GLD", "SLV", "USO", "UNG", "CPER",
+            "EURUSD=X", "USDJPY=X", "GBPUSD=X", "USDINR=X",
+            "SPY", "QQQ", "IWM", "^NSEI", "^GDAXI", "BTC-USD", "ETH-USD", "SOL-USD",
+            "ETERNAL.NS", "ETERNAL.BO"
+        ];
+
+        // Active State variables
+        let activeTicker = "AAPL";
+        let activeCurrency = "USD";
+        let allocatedCapital = 100000.0;
+        let activeTab = 1;
+        
+        let activeLivePeriod = "1mo";
+        let activeBtPeriod = "max";
+        
+        let isBacktestRunning = false;
+        let isLiveRunning = false;
+
+        // Suggestions navigation indices
+        let highlightedSuggestionIndex = -1;
+
+        // Model activation weights
+        let modelWeights = null;
+        let activeFeatures = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        
+        // Full backtest logs buffer to support custom timeframes in memory
+        let fullBacktestLogs = [];
+
+        // Combined Live/Historical Chart state
+        let currentLiveHistory = [];
+        let currentLiveTicks = [];
+
+        // Charts
+        let btEquityChart = null;
+        let btDrawdownChart = null;
+        let livePriceChart = null;
+        let liveEquityChart = null;
+
+        // Interval references
+        let consoleInterval = null;
+        let logInterval = null;
+        let liveConsoleInterval = null;
+        let liveLogInterval = null;
+        let statusInterval = null;
+
+        // Helper currency formatter
+        function formatCcy(value) {
+            const symbol = activeCurrency === 'INR' ? '₹' : '$';
+            return symbol + value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+
+        // Switch Tabs view
+        function switchTab(tabIndex) {
+            activeTab = tabIndex;
+            document.querySelectorAll('.bb-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+
+            if (tabIndex === 1) {
+                document.getElementById('tab-btn-backtest').classList.add('active');
+                document.getElementById('view-backtest').classList.add('active');
+                if (btEquityChart) btEquityChart.update();
+            } else if (tabIndex === 2) {
+                document.getElementById('tab-btn-live').classList.add('active');
+                document.getElementById('view-live').classList.add('active');
+                if (livePriceChart) livePriceChart.update();
+            } else if (tabIndex === 3) {
+                document.getElementById('tab-btn-visualizer').classList.add('active');
+                document.getElementById('view-visualizer').classList.add('active');
+                
+                // CRITICAL LAYOUT RESIZE FIX FOR CANVAS
+                setTimeout(() => {
+                    resizeCanvas();
+                }, 50);
+            }
+        }
+
+        // Toggle command menu help cheatsheet
+        function toggleHelp(show) {
+            const modal = document.getElementById('terminal-help-modal');
+            modal.style.display = show ? 'flex' : 'none';
+        }
+
+        // Focus command bar immediately on key typed
+        window.addEventListener('keydown', (e) => {
+            const activeEl = document.activeElement;
+            const cmdInput = document.getElementById('terminal-cmd-input');
+            
+            if (e.key === 'Escape') {
+                toggleHelp(false);
+                closeSuggestions();
+                cmdInput.focus();
+                e.preventDefault();
+            } else if (e.key === '?' && activeEl !== cmdInput) {
+                toggleHelp(true);
+                e.preventDefault();
+            } else if (activeEl !== cmdInput && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+                cmdInput.focus();
+            }
+        });
+
+        // Search Autocomplete Suggestion logic
+        const cmdInput = document.getElementById('terminal-cmd-input');
+        const suggestionsBox = document.getElementById('cmd-suggestions');
+
+        cmdInput.addEventListener('input', () => {
+            const val = cmdInput.value.trim().toUpperCase();
+            if (!val) {
+                closeSuggestions();
+                return;
+            }
+
+            // Exclude commands from suggestions
+            const commands = ["HELP", "STOP", "HALT", "KILL", "BT", "BACKTEST", "MON", "MONITOR", "VIS", "NET", "NN", "ALLOC", "ALLOCATE"];
+            if (commands.some(cmd => cmd.startsWith(val))) {
+                closeSuggestions();
+                return;
+            }
+
+            // Filter tickers from known list
+            const matches = SECTOR_TICKERS.filter(ticker => ticker.startsWith(val) || ticker.includes(val)).slice(0, 8);
+            
+            if (matches.length > 0) {
+                suggestionsBox.innerHTML = '';
+                highlightedSuggestionIndex = -1;
+                matches.forEach((ticker, idx) => {
+                    const div = document.createElement('div');
+                    div.className = 'suggestion-item';
+                    div.innerText = ticker;
+                    div.addEventListener('click', () => {
+                        selectSuggestion(ticker);
+                    });
+                    suggestionsBox.appendChild(div);
+                });
+                suggestionsBox.style.display = 'block';
+            } else {
+                closeSuggestions();
+            }
+        });
+
+        function selectSuggestion(ticker) {
+            const val = cmdInput.value.trim().toUpperCase();
+            const tokens = val.split(/\s+/);
+            if (tokens.length > 1) {
+                tokens[0] = ticker;
+                cmdInput.value = tokens.join(' ');
+            } else {
+                cmdInput.value = ticker;
+            }
+            closeSuggestions();
+            cmdInput.focus();
+        }
+
+        function closeSuggestions() {
+            suggestionsBox.style.display = 'none';
+            highlightedSuggestionIndex = -1;
+        }
+
+        // Suggestions Key Navigation
+        cmdInput.addEventListener('keydown', (e) => {
+            const items = suggestionsBox.querySelectorAll('.suggestion-item');
+            if (suggestionsBox.style.display === 'block' && items.length > 0) {
+                if (e.key === 'ArrowDown') {
+                    highlightedSuggestionIndex = (highlightedSuggestionIndex + 1) % items.length;
+                    updateHighlightedSuggestion(items);
+                    e.preventDefault();
+                } else if (e.key === 'ArrowUp') {
+                    highlightedSuggestionIndex = (highlightedSuggestionIndex - 1 + items.length) % items.length;
+                    updateHighlightedSuggestion(items);
+                    e.preventDefault();
+                } else if (e.key === 'Tab') {
+                    if (highlightedSuggestionIndex >= 0) {
+                        selectSuggestion(items[highlightedSuggestionIndex].innerText);
+                        e.preventDefault();
+                    }
+                } else if (e.key === 'Enter') {
+                    if (highlightedSuggestionIndex >= 0) {
+                        selectSuggestion(items[highlightedSuggestionIndex].innerText);
+                        e.preventDefault();
+                    }
+                }
+            }
+        });
+
+        function updateHighlightedSuggestion(items) {
+            items.forEach((item, idx) => {
+                if (idx === highlightedSuggestionIndex) {
+                    item.classList.add('active');
+                    item.scrollIntoView({ block: 'nearest' });
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
+
+        // Command Prompt Executer
+        cmdInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && highlightedSuggestionIndex === -1) {
+                const text = cmdInput.value.trim().toUpperCase();
+                cmdInput.value = '';
+                closeSuggestions();
+                
+                if (!text) return;
+                
+                const tokens = text.split(/\s+/);
+                
+                // Parse commands
+                if (tokens[0] === 'HELP' || tokens[0] === '?') {
+                    toggleHelp(true);
+                    return;
+                }
+                
+                if (tokens[0] === '1' || tokens[0] === 'BACKTEST' || tokens[0] === 'BT') {
+                    if (tokens.length === 1) {
+                        switchTab(1);
+                        return;
+                    }
+                }
+                if (tokens[0] === '2' || tokens[0] === 'MONITOR' || tokens[0] === 'MON' || tokens[0] === 'GP') {
+                    if (tokens.length === 1) {
+                        switchTab(2);
+                        return;
+                    }
+                }
+                if (tokens[0] === '3' || tokens[0] === 'VIS' || tokens[0] === 'NET' || tokens[0] === 'NN') {
+                    switchTab(3);
+                    return;
+                }
+
+                if (tokens[0] === 'ALLOC' || tokens[0] === 'ALLOCATE') {
+                    const val = parseFloat(tokens[1]);
+                    if (!isNaN(val) && val > 0) {
+                        allocatedCapital = val;
+                        document.getElementById('bt-allocation-label').innerText = formatCcy(allocatedCapital);
+                        document.getElementById('live-allocated-pool').innerText = formatCcy(allocatedCapital);
+                        document.getElementById('live-cash-val').innerText = formatCcy(allocatedCapital);
+                        document.getElementById('live-equity-val').innerText = formatCcy(allocatedCapital);
+                        addFeedbackLog(`Allocated paper pool capital set to: ${formatCcy(allocatedCapital)}`);
+                    } else {
+                        addFeedbackLog("ERROR: Invalid allocation capital amount. Usage: ALLOC <amount>");
+                    }
+                    return;
+                }
+
+                if (tokens[0] === 'RUN') {
+                    if (tokens[1] === 'BT' || tokens[1] === 'BACKTEST') {
+                        executeBacktest();
+                        return;
+                    }
+                    if (tokens[1] === 'MON' || tokens[1] === 'MONITOR') {
+                        executeLiveMonitor();
+                        return;
+                    }
+                }
+                if (tokens[0] === 'STOP' || tokens[0] === 'HALT' || tokens[0] === 'KILL') {
+                    killBacktest();
+                    killLiveMonitor();
+                    return;
+                }
+
+                // Check security validity before loading
+                const queryTicker = tokens[0];
+                validateAndLoadSecurity(queryTicker, tokens[1]);
+            }
+        });
+
+        function validateAndLoadSecurity(ticker, subFunction) {
+            addFeedbackLog(`Verifying security identifier: ${ticker}...`);
+            document.getElementById('market-status-badge').innerText = "VERIFYING TICKER...";
+            document.getElementById('market-status-badge').className = "";
+
+            fetch(`/api/validate_ticker?ticker=${ticker}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.valid) {
+                    const resolved = data.ticker;
+                    if (ticker.toUpperCase() !== resolved.toUpperCase()) {
+                        addFeedbackLog(`REBRAND ALERT: '${ticker}' was rebranded to '${resolved}' (effective April 2025). Mapping query automatically.`);
+                    }
+                    activeTicker = resolved;
+                    // Detect currency
+                    activeCurrency = (activeTicker.endsWith(".NS") || activeTicker.endsWith(".BO")) ? "INR" : "USD";
+                    
+                    document.getElementById('status-ticker').innerText = activeTicker;
+                    document.getElementById('bt-asset-label').innerText = activeTicker;
+                    document.getElementById('bt-allocation-label').innerText = formatCcy(allocatedCapital);
+                    document.getElementById('live-allocated-pool').innerText = formatCcy(allocatedCapital);
+                    document.getElementById('live-cash-val').innerText = formatCcy(allocatedCapital);
+                    document.getElementById('live-equity-val').innerText = formatCcy(allocatedCapital);
+                    const liveChartTickerEl = document.getElementById('live-chart-ticker');
+                    if (liveChartTickerEl) {
+                        liveChartTickerEl.innerText = `${activeTicker} LIVE PRICES & BUY/SELL SIGNAL MARKS`;
+                    }
+                    
+                    addFeedbackLog(`Security validated successfully: ${activeTicker} (${activeCurrency} Basis)`);
+                    
+                    // Immediately fetch historical price data and update graphs
+                    prepopulateLiveChart(activeTicker, activeLivePeriod);
+
+                    if (subFunction === 'GP' || subFunction === 'MON' || subFunction === 'MONITOR') {
+                        switchTab(2);
+                        executeLiveMonitor();
+                    } else if (subFunction === 'BT' || subFunction === 'BACKTEST') {
+                        switchTab(1);
+                        executeBacktest();
+                    }
+                } else {
+                    document.getElementById('market-status-badge').innerText = "INVALID SECURITY";
+                    document.getElementById('market-status-badge').className = "market-closed-status";
+                    addFeedbackLog(`ERROR: Invalid security code '${ticker}' or no history available on Yahoo Finance.`);
+                }
+            })
+            .catch(() => {
+                addFeedbackLog("ERROR: Security verification network fail.");
+            });
+        }
+
+        // Instantly prepopulate live chart with historical data (with dynamic intervals)
+        function prepopulateLiveChart(ticker, period) {
+            let yfPeriod = "1mo";
+            if (period === "1d") yfPeriod = "1d";
+            else if (period === "5d") yfPeriod = "5d";
+            else if (period === "3mo") yfPeriod = "3mo";
+            else if (period === "1y") yfPeriod = "1y";
+            else if (period === "max") yfPeriod = "2y";
+
+            fetch(`/api/history?ticker=${ticker}&period=${yfPeriod}`)
+            .then(res => res.json())
+            .then(history => {
+                if (!history || history.length === 0) return;
+                
+                currentLiveHistory = history;
+                renderLiveChartCombined();
+            });
+        }
+
+        // Render combined chart history + live monitor ticks
+        function renderLiveChartCombined() {
+            let combined = [...currentLiveHistory];
+            if (currentLiveTicks.length > 0) {
+                const firstTickTime = currentLiveTicks[0].timestamp;
+                combined = combined.filter(h => h.timestamp < firstTickTime);
+                combined = combined.concat(currentLiveTicks);
+            }
+
+            let maxPoints = 50;
+            if (activeLivePeriod === "1d") maxPoints = 80;
+            else if (activeLivePeriod === "5d") maxPoints = 130;
+            else if (activeLivePeriod === "1mo") maxPoints = 50;
+            else if (activeLivePeriod === "3mo") maxPoints = 100;
+            else if (activeLivePeriod === "1y") maxPoints = 250;
+            else if (activeLivePeriod === "max") maxPoints = 500;
+
+            const displayPoints = combined.slice(-maxPoints);
+
+            const times = displayPoints.map(e => {
+                if (e.timestamp.includes(' ') && !e.timestamp.includes('00:00:00')) {
+                    return e.timestamp.split(' ')[1].substring(0, 5); // Intraday HH:MM
+                }
+                return e.timestamp.split(' ')[0]; // Daily YYYY-MM-DD
+            });
+            const prices = displayPoints.map(e => e.price);
+            const equities = displayPoints.map(e => e.equity || allocatedCapital);
+
+            const styles = [];
+            const radius = [];
+            const borderCol = [];
+            const bgCol = [];
+
+            displayPoints.forEach(e => {
+                if (e.signal === 'BUY') {
+                    styles.push('triangle');
+                    radius.push(7);
+                    bgCol.push('#00ff66');
+                    borderCol.push('#00ff66');
+                } else if (e.signal === 'SELL') {
+                    styles.push('triangle');
+                    radius.push(7);
+                    bgCol.push('#ff3b30');
+                    borderCol.push('#ff3b30');
+                } else {
+                    styles.push('circle');
+                    radius.push(0);
+                    bgCol.push('transparent');
+                    borderCol.push('transparent');
+                }
+            });
+
+            livePriceChart.data.labels = times;
+            livePriceChart.data.datasets[0].data = prices;
+            livePriceChart.data.datasets[0].pointStyle = styles;
+            livePriceChart.data.datasets[0].pointRadius = radius;
+            livePriceChart.data.datasets[0].pointBackgroundColor = bgCol;
+            livePriceChart.data.datasets[0].pointBorderColor = borderCol;
+            livePriceChart.update('none');
+
+            liveEquityChart.data.labels = times;
+            liveEquityChart.data.datasets[0].data = equities;
+            liveEquityChart.update('none');
+
+            if (combined.length > 0) {
+                const latest = combined[combined.length - 1];
+                document.getElementById('live-stat-price').innerText = formatCcy(latest.price);
+                document.getElementById('live-stat-mlp').innerText = (latest.mlp_conviction*100).toFixed(1) + '%';
+                document.getElementById('live-stat-regime').innerText = 'Regime ' + latest.dominant_regime;
+                document.getElementById('live-stat-entropy').innerText = latest.entropy.toFixed(3);
+                
+                // Return calculation
+                const ret = ((latest.equity / allocatedCapital) - 1.0) * 100;
+                const retEl = document.getElementById('live-stat-return');
+                retEl.innerText = (ret >= 0 ? '+' : '') + ret.toFixed(2) + '%';
+                retEl.className = 'metric-val ' + (ret >= 0 ? 'green' : 'red');
+            }
+        }
+
+        // Timeframe selector toggles for Live feed preload
+        function changeLiveTimeframe(period) {
+            activeLivePeriod = period;
+            document.querySelectorAll('#live-timeframe-selectors .tf-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.innerText.toLowerCase() === period.toLowerCase()) btn.classList.add('active');
+            });
+            prepopulateLiveChart(activeTicker, period);
+        }
+
+        // Timeframe selector toggles for Backtest views (In-memory filter)
+        function changeBtTimeframe(period) {
+            activeBtPeriod = period;
+            document.querySelectorAll('#bt-timeframe-selectors .tf-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.innerText.toLowerCase() === period.toLowerCase()) btn.classList.add('active');
+            });
+            renderBacktestData();
+        }
+
+        // Renders slice of backtest logs depending on active Bt timeframe selector
+        function renderBacktestData() {
+            if (!fullBacktestLogs || fullBacktestLogs.length === 0) return;
+
+            let logsSlice = [...fullBacktestLogs];
+            
+            // Slice depending on period
+            if (activeBtPeriod === "1d") logsSlice = fullBacktestLogs.slice(-1);
+            else if (activeBtPeriod === "5d") logsSlice = fullBacktestLogs.slice(-5);
+            else if (activeBtPeriod === "1mo") logsSlice = fullBacktestLogs.slice(-21);
+            else if (activeBtPeriod === "3mo") logsSlice = fullBacktestLogs.slice(-63);
+            else if (activeBtPeriod === "1y") logsSlice = fullBacktestLogs.slice(-252);
+            
+            // 1. Setup table
+            const tbody = document.getElementById('bt-table-body');
+            tbody.innerHTML = '';
+            const reversed = [...logsSlice].reverse().slice(0, 30);
+            reversed.forEach(e => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${e.timestamp.split(' ')[0]}</td>
+                    <td>R${e.dominant_regime}</td>
+                    <td>${(e.regime_confidence*100).toFixed(1)}%</td>
+                    <td>${e.entropy.toFixed(3)}</td>
+                    <td>${formatCcy(e.equity||100000)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // 2. Setup charts
+            const labels = logsSlice.map(e => e.timestamp.split(' ')[0]);
+            const equities = logsSlice.map(e => e.equity || 100000);
+            let peak = -Infinity;
+            const dds = equities.map(eq => {
+                if (eq > peak) peak = eq;
+                return ((eq - peak) / peak) * 100;
+            });
+
+            btEquityChart.data.labels = labels;
+            btEquityChart.data.datasets[0].data = equities;
+            btEquityChart.update('none');
+
+            btDrawdownChart.data.labels = labels;
+            btDrawdownChart.data.datasets[0].data = dds;
+            btDrawdownChart.update('none');
+        }
+
+        function addFeedbackLog(msg) {
+            const btConsole = document.getElementById('bt-console');
+            const liveConsole = document.getElementById('live-console');
+            const styledMsg = `\n>>> ${msg}\n`;
+            btConsole.innerText += styledMsg;
+            liveConsole.innerText += styledMsg;
+            btConsole.scrollTop = btConsole.scrollHeight;
+            liveConsole.scrollTop = liveConsole.scrollHeight;
+        }
+
+        // Attribution chart initializers
+        function initCharts() {
+            const gridOpts = { color: '#111111', borderColor: '#333333' };
+            
+            const ctxBtEq = document.getElementById('bt-equity-chart').getContext('2d');
+            const ctxBtDd = document.getElementById('bt-drawdown-chart').getContext('2d');
+            
+            if (btEquityChart) btEquityChart.destroy();
+            if (btDrawdownChart) btDrawdownChart.destroy();
+            
+            btEquityChart = new Chart(ctxBtEq, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'System Equity',
+                        data: [],
+                        borderColor: '#ff9900',
+                        borderWidth: 1.2,
+                        backgroundColor: 'rgba(255, 153, 0, 0.03)',
+                        fill: true,
+                        pointRadius: 0,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: gridOpts, ticks: { color: '#666', font: { family: 'Fira Code', size: 9 }, maxRotation: 0 } },
+                        y: { grid: gridOpts, ticks: { color: '#666', font: { family: 'Fira Code', size: 9 } } }
+                    }
+                }
+            });
+
+            btDrawdownChart = new Chart(ctxBtDd, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Drawdown %',
+                        data: [],
+                        borderColor: '#ff3b30',
+                        borderWidth: 1.0,
+                        backgroundColor: 'rgba(255, 59, 48, 0.08)',
+                        fill: true,
+                        pointRadius: 0,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: gridOpts, ticks: { color: '#666', font: { family: 'Fira Code', size: 9 }, maxRotation: 0 } },
+                        y: { grid: gridOpts, ticks: { color: '#666', font: { family: 'Fira Code', size: 9 }, callback: (v) => v + '%' } }
+                    }
+                }
+            });
+
+            // Live Price graph and Buy/Sell point datasets
+            const ctxLivePrice = document.getElementById('live-price-chart').getContext('2d');
+            const ctxLiveEq = document.getElementById('live-equity-chart').getContext('2d');
+
+            if (livePriceChart) livePriceChart.destroy();
+            if (liveEquityChart) liveEquityChart.destroy();
+
+            livePriceChart = new Chart(ctxLivePrice, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Live Close Price',
+                        data: [],
+                        borderColor: '#00ff66',
+                        borderWidth: 1.5,
+                        backgroundColor: 'rgba(0, 255, 102, 0.02)',
+                        fill: true,
+                        pointRadius: [],
+                        pointStyle: [],
+                        pointBackgroundColor: [],
+                        pointBorderColor: [],
+                        pointHoverRadius: 6,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: gridOpts, ticks: { color: '#666', font: { family: 'Fira Code', size: 9 }, maxRotation: 0 } },
+                        y: { grid: gridOpts, ticks: { color: '#666', font: { family: 'Fira Code', size: 9 } } }
+                    }
+                }
+            });
+
+            liveEquityChart = new Chart(ctxLiveEq, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Paper Equity Value',
+                        data: [],
+                        borderColor: '#ff9900',
+                        borderWidth: 1.2,
+                        backgroundColor: 'rgba(255, 153, 0, 0.05)',
+                        fill: true,
+                        pointRadius: 0,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: gridOpts, ticks: { color: '#666', font: { family: 'Fira Code', size: 9 }, maxRotation: 0 } },
+                        y: { grid: gridOpts, ticks: { color: '#666', font: { family: 'Fira Code', size: 9 } } }
+                    }
+                }
+            });
+        }
+
+        // Trigger Backtest
+        function executeBacktest() {
+            if (isBacktestRunning) return;
+            isBacktestRunning = true;
+
+            document.getElementById('engine-dot-backtest').className = 'status-dot running';
+            document.getElementById('engine-text-backtest').innerText = 'RUNNING';
+            
+            document.getElementById('bt-stat-return').innerText = '--';
+            document.getElementById('bt-stat-return').className = 'metric-val';
+            document.getElementById('bt-stat-maxdd').innerText = '--';
+            document.getElementById('bt-stat-sharpe').innerText = '--';
+            document.getElementById('bt-stat-entropy').innerText = '--';
+            document.getElementById('bt-stat-liq').innerText = '--';
+            document.getElementById('bt-console').innerText = 'Initiating historical backtest engine...\n';
+
+            fetch('/api/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'sandbox', ticker: activeTicker })
+            })
+            .then(res => res.json())
+            .then(data => {
+                startPollingBacktest();
+            })
+            .catch(err => {
+                document.getElementById('bt-console').innerText += `Failed to launch: ${err}\n`;
+                stopBacktestUI();
+            });
+        }
+
+        function killBacktest() {
+            fetch('/api/kill', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('bt-console').innerText += "\n--- PROCESS MANUALLY TERMINATED BY OPERATOR ---\n";
+                stopBacktestUI();
+            });
+        }
+
+        function stopBacktestUI() {
+            isBacktestRunning = false;
+            document.getElementById('engine-dot-backtest').className = 'status-dot';
+            document.getElementById('engine-text-backtest').innerText = 'READY';
+            if (consoleInterval) clearInterval(consoleInterval);
+            if (logInterval) clearInterval(logInterval);
+        }
+
+        function startPollingBacktest() {
+            if (consoleInterval) clearInterval(consoleInterval);
+            if (logInterval) clearInterval(logInterval);
+
+            consoleInterval = setInterval(() => {
+                fetch('/api/output')
+                .then(res => res.text())
+                .then(text => {
+                    const el = document.getElementById('bt-console');
+                    el.innerText = text;
+                    el.scrollTop = el.scrollHeight;
+
+                    // Parse statistics
+                    const retMatch = text.match(/Total Return\s+\|\s+([-\d.]+%)\s+\|\s+([-\d.]+%)/);
+                    const sharpeMatch = text.match(/Sharpe Ratio\s+\|\s+([-\d.]+)\s+\|\s+([-\d.]+)/);
+                    const maxddMatch = text.match(/Max Drawdown\s+\|\s+([-\d.]+%)\s+\|\s+([-\d.]+%)/);
+                    const liqMatch = text.match(/Final Liquidation\s+\|\s+[^|]+\|\s+[^0-9]+([\d,]+)/);
+
+                    if (retMatch) {
+                        const val = retMatch[2];
+                        const cleanVal = parseFloat(val);
+                        document.getElementById('bt-stat-return').innerText = val;
+                        document.getElementById('bt-stat-return').className = 'metric-val ' + (cleanVal >= 0 ? 'green' : 'red');
+                    }
+                    if (sharpeMatch) document.getElementById('bt-stat-sharpe').innerText = sharpeMatch[2];
+                    if (maxddMatch) document.getElementById('bt-stat-maxdd').innerText = maxddMatch[2];
+                    if (liqMatch) document.getElementById('bt-stat-liq').innerText = formatCcy(parseFloat(liqMatch[1].replace(/,/g, '')));
+                });
+            }, 250);
+
+            logInterval = setInterval(() => {
+                fetch('/api/log')
+                .then(res => res.json())
+                .then(logs => {
+                    if (!logs || logs.length === 0) return;
+
+                    // Cache full logs in memory for custom timeline slices
+                    fullBacktestLogs = logs;
+                    renderBacktestData();
+
+                    const latest = logs[logs.length - 1];
+                    if (latest) {
+                        document.getElementById('bt-stat-entropy').innerText = latest.entropy.toFixed(3);
+                        activeFeatures = [
+                            (Math.sin(logs.length * 0.05) * 1.5),
+                            (latest.entropy * 2.0 - 1.0),
+                            (0.5 + latest.dominant_regime * 0.3),
+                            ((latest.dominant_regime === 0 || latest.dominant_regime === 3 ? 1 : -1) * latest.regime_confidence * 1.8),
+                            (-latest.entropy * 1.2),
+                            (latest.entropy * 0.8),
+                            (latest.regime_confidence)
+                        ];
+                        if (activeTab === 3) renderNeuralNet();
+
+                        for (let r=0; r<5; r++) {
+                            const val = r === latest.dominant_regime ? latest.regime_confidence : (1.0 - latest.regime_confidence)/4.0;
+                            document.getElementById(`bt-r${r}-bar`).style.width = (val*100).toFixed(1) + '%';
+                            document.getElementById(`bt-r${r}`).innerText = (val*100).toFixed(1) + '%';
+                        }
+                    }
+                });
+            }, 500);
+
+            statusInterval = setInterval(() => {
+                fetch('/api/status')
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.running) {
+                        clearInterval(statusInterval);
+                        setTimeout(() => {
+                            stopBacktestUI();
+                        }, 1000);
+                    }
+                });
+            }, 1000);
+        }
+
+        // Live Paper trading operations
+        function executeLiveMonitor() {
+            if (isLiveRunning) return;
+            isLiveRunning = true;
+
+            document.getElementById('engine-dot-live').className = 'status-dot running';
+            document.getElementById('engine-text-live').innerText = 'MONITORING';
+            document.getElementById('live-console').innerText = `Spawning real-time observation loop for ${activeTicker}...\n`;
+
+            resetLiveUI();
+
+            fetch('/api/run_live', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticker: activeTicker, interval: 5, allocation: allocatedCapital })
+            })
+            .then(res => res.json())
+            .then(data => {
+                startPollingLive();
+            })
+            .catch(err => {
+                document.getElementById('live-console').innerText += `Failed to spawn monitor: ${err}\n`;
+                stopLiveUI();
+            });
+        }
+
+        function killLiveMonitor() {
+            fetch('/api/kill_live', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('live-console').innerText += "\n--- LIVE OBSERVATION HALTED BY OPERATOR ---\n";
+                stopLiveUI();
+            });
+        }
+
+        function stopLiveUI() {
+            isLiveRunning = false;
+            document.getElementById('engine-dot-live').className = 'status-dot offline';
+            document.getElementById('engine-text-live').innerText = 'INACTIVE';
+            if (liveConsoleInterval) clearInterval(liveConsoleInterval);
+            if (liveLogInterval) clearInterval(liveLogInterval);
+        }
+
+        function resetLiveUI() {
+            setIndicator('live-comp-sec', 'green');
+            setIndicator('live-comp-otr', 'green');
+            setIndicator('live-comp-sebi', 'green');
+            setIndicator('live-comp-circuit', 'green');
+
+            document.getElementById('live-stat-price').innerText = '--';
+            document.getElementById('live-stat-mlp').innerText = '--';
+            document.getElementById('live-stat-regime').innerText = '--';
+            document.getElementById('live-stat-entropy').innerText = '--';
+            document.getElementById('live-stat-return').innerText = '0.00%';
+            document.getElementById('live-stat-return').className = 'metric-val';
+            
+            currentLiveTicks = [];
+            initCharts();
+        }
+
+        function setIndicator(id, color) {
+            const el = document.getElementById(id);
+            el.className = 'light ' + color;
+        }
+
+        function startPollingLive() {
+            if (liveConsoleInterval) clearInterval(liveConsoleInterval);
+            if (liveLogInterval) clearInterval(liveLogInterval);
+
+            liveConsoleInterval = setInterval(() => {
+                fetch('/api/live_output')
+                .then(res => res.text())
+                .then(text => {
+                    const el = document.getElementById('live-console');
+                    el.innerText = text;
+                    el.scrollTop = el.scrollHeight;
+
+                    if (text.includes('[COMPLIANCE GATE] EMERGENCY HALT')) setIndicator('live-comp-sec', 'red');
+                    if (text.includes('[COMPLIANCE ALERT] OTR BREACH')) setIndicator('live-comp-otr', 'red');
+                    if (text.includes('[COMPLIANCE GATE] ORDER BLOCKED')) setIndicator('live-comp-circuit', 'orange');
+                });
+            }, 300);
+
+            liveLogInterval = setInterval(() => {
+                fetch('/api/live_log')
+                .then(res => res.json())
+                .then(logs => {
+                    if (!logs || logs.length === 0) return;
+
+                    const tbody = document.getElementById('live-table-body');
+                    tbody.innerHTML = '';
+                    const reversed = [...logs].reverse().slice(0, 20);
+                    reversed.forEach(e => {
+                        const signalColor = e.signal === 'BUY' ? 'color: var(--text-secondary);' : (e.signal === 'SELL' ? 'color: var(--alert-color);' : '');
+                        const displayTime = (e.timestamp.includes(' ') && !e.timestamp.includes('00:00:00')) ? e.timestamp.split(' ')[1] : e.timestamp.split(' ')[0];
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${displayTime}</td>
+                            <td>${formatCcy(e.price)}</td>
+                            <td>${(e.mlp_conviction*100).toFixed(1)}%</td>
+                            <td style="${signalColor} font-weight:bold;">${e.signal}</td>
+                            <td>${e.holdings.toFixed(1)}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+
+                    const latest = logs[logs.length - 1];
+                    if (latest) {
+                        document.getElementById('live-cash-val').innerText = formatCcy(latest.cash);
+                        document.getElementById('live-shares-val').innerText = `${latest.holdings.toFixed(2)} Units`;
+                        document.getElementById('live-equity-val').innerText = formatCcy(latest.equity);
+                        
+                        document.getElementById('live-stat-price').innerText = formatCcy(latest.price);
+                        document.getElementById('live-stat-mlp').innerText = (latest.mlp_conviction*100).toFixed(1) + '%';
+                        document.getElementById('live-stat-regime').innerText = 'Regime ' + latest.dominant_regime;
+                        document.getElementById('live-stat-entropy').innerText = latest.entropy.toFixed(3);
+
+                        // Set Market open hours badge
+                        const marketStatusBadge = document.getElementById('market-status-badge');
+                        marketStatusBadge.innerText = latest.market_status || "LIVE";
+                        if (latest.market_status && latest.market_status.includes("CLOSED")) {
+                            marketStatusBadge.className = "market-closed-status";
+                        } else {
+                            marketStatusBadge.className = "market-open-status";
+                        }
+
+                        // Return P/L computation
+                        const ret = ((latest.equity / allocatedCapital) - 1.0) * 100;
+                        const retEl = document.getElementById('live-stat-return');
+                        retEl.innerText = (ret >= 0 ? '+' : '') + ret.toFixed(2) + '%';
+                        retEl.className = 'metric-val ' + (ret >= 0 ? 'green' : 'red');
+
+                        activeFeatures = [
+                            latest.features.v,
+                            latest.features.r,
+                            latest.features.c,
+                            latest.features.a,
+                            latest.features.d,
+                            latest.features.l,
+                            latest.features.b
+                        ];
+                        
+                        document.getElementById('live-feat-v').innerText = latest.features.v.toFixed(2);
+                        document.getElementById('live-feat-r').innerText = latest.features.r.toFixed(2);
+                        document.getElementById('live-feat-c').innerText = latest.features.c.toFixed(2);
+                        document.getElementById('live-feat-a').innerText = latest.features.a.toFixed(2);
+                        document.getElementById('live-feat-d').innerText = latest.features.d.toFixed(2);
+                        document.getElementById('live-feat-l').innerText = latest.features.l.toFixed(2);
+                        document.getElementById('live-feat-b').innerText = latest.features.b.toFixed(2);
+
+                        if (activeTab === 3) renderNeuralNet();
+                    }
+
+                    // Combined log ticks updates and trigger redraw
+                    currentLiveTicks = logs;
+                    renderLiveChartCombined();
+                });
+            }, 500);
+
+            const statusInt = setInterval(() => {
+                fetch('/api/live_status')
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.running) {
+                        clearInterval(statusInt);
+                        stopLiveUI();
+                    }
+                });
+            }, 1000);
+        }
+
+        // NEURAL NETWORK DRAWING ENGINE
+        const canvas = document.getElementById('nn-canvas');
+        const ctxNn = canvas.getContext('2d');
+
+        function loadModelArchitecture() {
+            fetch('/api/model_info')
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    console.error(data.error);
+                } else {
+                    modelWeights = data;
+                    renderNeuralNet();
+                }
+            });
+        }
+
+        function resizeCanvas() {
+            const rect = canvas.parentNode.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+                renderNeuralNet();
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function solveModelActivations() {
+            if (!modelWeights) return null;
+            
+            const w1 = modelWeights.weights[0];
+            const b1 = modelWeights.biases[0];
+            const w2 = modelWeights.weights[1];
+            const b2 = modelWeights.biases[1];
+            const w3 = modelWeights.weights[2];
+            const b3 = modelWeights.biases[2];
+
+            let a1 = [];
+            for (let j = 0; j < 32; j++) {
+                let z = b1[j];
+                for (let i = 0; i < 7; i++) {
+                    z += activeFeatures[i] * w1[i][j];
+                }
+                a1.push(Math.max(0, z));
+            }
+
+            let a2 = [];
+            for (let k = 0; k < 16; k++) {
+                let z = b2[k];
+                for (let j = 0; j < 32; j++) {
+                    z += a1[j] * w2[j][k];
+                }
+                a2.push(Math.max(0, z));
+            }
+
+            let z3 = b3[0];
+            for (let k = 0; k < 16; k++) {
+                z3 += a2[k] * w3[k][0];
+            }
+            const outVal = 1 / (1 + Math.exp(-z3));
+
+            return {
+                layer1: a1,
+                layer2: a2,
+                output: outVal
+            };
+        }
+
+        function renderNeuralNet() {
+            if (!canvas.width || !canvas.height) return;
+            
+            ctxNn.fillStyle = '#020202';
+            ctxNn.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (!modelWeights) {
+                ctxNn.fillStyle = '#ff9900';
+                ctxNn.font = '14px Share Tech Mono';
+                ctxNn.fillText('LOADING NEURAL MATRIX SYNC...', 30, 40);
+                return;
+            }
+
+            const activations = solveModelActivations();
+            const layerNodes = [7, 32, 16, 1];
+            const nodeRadius = 7;
+            const xCoords = [
+                canvas.width * 0.12,
+                canvas.width * 0.38,
+                canvas.width * 0.68,
+                canvas.width * 0.88
+            ];
+
+            const positions = [];
+            for (let l = 0; l < 4; l++) {
+                const nodeCount = layerNodes[l];
+                const layerY = [];
+                for (let n = 0; n < nodeCount; n++) {
+                    const y = (canvas.height / (nodeCount + 1)) * (n + 1);
+                    layerY.push(y);
+                }
+                positions.push(layerY);
+            }
+
+            const maxW0 = getMaxAbs(modelWeights.weights[0]);
+            const maxW1 = getMaxAbs(modelWeights.weights[1]);
+            const maxW2 = getMaxAbs(modelWeights.weights[2]);
+
+            // Connections input -> L1
+            for (let i = 0; i < 7; i++) {
+                for (let j = 0; j < 32; j++) {
+                    const w = modelWeights.weights[0][i][j];
+                    const normW = Math.abs(w) / maxW0;
+                    const pathActive = activations ? (Math.abs(activeFeatures[i]) * activations.layer1[j] > 0) : false;
+
+                    ctxNn.strokeStyle = w > 0 ? `rgba(0, 255, 102, ${normW * (pathActive ? 0.35 : 0.07)})` : `rgba(255, 59, 48, ${normW * (pathActive ? 0.35 : 0.07)})`;
+                    ctxNn.lineWidth = normW * (pathActive ? 1.5 : 0.6);
+                    ctxNn.beginPath();
+                    ctxNn.moveTo(xCoords[0], positions[0][i]);
+                    ctxNn.lineTo(xCoords[1], positions[1][j]);
+                    ctxNn.stroke();
+                }
+            }
+
+            // Connections L1 -> L2
+            for (let j = 0; j < 32; j++) {
+                for (let k = 0; k < 16; k++) {
+                    const w = modelWeights.weights[1][j][k];
+                    const normW = Math.abs(w) / maxW1;
+                    const pathActive = activations ? (activations.layer1[j] * activations.layer2[k] > 0) : false;
+
+                    ctxNn.strokeStyle = w > 0 ? `rgba(0, 255, 102, ${normW * (pathActive ? 0.45 : 0.07)})` : `rgba(255, 59, 48, ${normW * (pathActive ? 0.45 : 0.07)})`;
+                    ctxNn.lineWidth = normW * (pathActive ? 1.5 : 0.6);
+                    ctxNn.beginPath();
+                    ctxNn.moveTo(xCoords[1], positions[1][j]);
+                    ctxNn.lineTo(xCoords[2], positions[2][k]);
+                    ctxNn.stroke();
+                }
+            }
+
+            // Connections L2 -> Output
+            for (let k = 0; k < 16; k++) {
+                const w = modelWeights.weights[2][k][0];
+                const normW = Math.abs(w) / maxW2;
+                const pathActive = activations ? (activations.layer2[k] > 0) : false;
+
+                ctxNn.strokeStyle = w > 0 ? `rgba(0, 255, 102, ${normW * (pathActive ? 0.6 : 0.15)})` : `rgba(255, 59, 48, ${normW * (pathActive ? 0.6 : 0.15)})`;
+                ctxNn.lineWidth = normW * (pathActive ? 2.0 : 0.8);
+                ctxNn.beginPath();
+                ctxNn.moveTo(xCoords[2], positions[2][k]);
+                ctxNn.lineTo(xCoords[3], positions[3][0]);
+                ctxNn.stroke();
+            }
+
+            const featureNames = ['Volume(v)', 'Return(r)', 'Volatility(c)', 'Momentum(a)', 'Drawdown(d)', 'Liquidity(l)', 'Breadth(b)'];
+            
+            // Draw nodes
+            for (let i = 0; i < 7; i++) {
+                const x = xCoords[0];
+                const y = positions[0][i];
+                const val = activeFeatures[i];
+                ctxNn.fillStyle = val > 0.0 ? '#00ff66' : (val < 0.0 ? '#ff3b30' : '#222222');
+                ctxNn.beginPath();
+                ctxNn.arc(x, y, nodeRadius, 0, 2 * Math.PI);
+                ctxNn.fill();
+                ctxNn.strokeStyle = '#ffffff';
+                ctxNn.lineWidth = 1;
+                ctxNn.stroke();
+                
+                ctxNn.fillStyle = 'var(--text-dim)';
+                ctxNn.font = '10px Share Tech Mono';
+                ctxNn.textAlign = 'right';
+                ctxNn.fillText(`${featureNames[i]}: ${val.toFixed(2)}`, x - 14, y + 3);
+            }
+
+            const maxAct1 = activations ? Math.max(...activations.layer1, 1e-6) : 1;
+            for (let j = 0; j < 32; j++) {
+                const x = xCoords[1];
+                const y = positions[1][j];
+                const act = activations ? activations.layer1[j] : 0;
+                const ratio = act / maxAct1;
+                ctxNn.fillStyle = activations && act > 0 ? `rgba(255, 153, 0, ${0.2 + ratio * 0.8})` : '#111111';
+                ctxNn.beginPath();
+                ctxNn.arc(x, y, nodeRadius - 1.5, 0, 2 * Math.PI);
+                ctxNn.fill();
+                ctxNn.strokeStyle = activations && act > 0 ? `rgba(255, 153, 0, ${ratio})` : '#333333';
+                ctxNn.lineWidth = 0.8;
+                ctxNn.stroke();
+            }
+
+            const maxAct2 = activations ? Math.max(...activations.layer2, 1e-6) : 1;
+            for (let k = 0; k < 16; k++) {
+                const x = xCoords[2];
+                const y = positions[2][k];
+                const act = activations ? activations.layer2[k] : 0;
+                const ratio = act / maxAct2;
+                ctxNn.fillStyle = activations && act > 0 ? `rgba(255, 153, 0, ${0.2 + ratio * 0.8})` : '#111111';
+                ctxNn.beginPath();
+                ctxNn.arc(x, y, nodeRadius - 1.5, 0, 2 * Math.PI);
+                ctxNn.fill();
+                ctxNn.strokeStyle = activations && act > 0 ? `rgba(255, 153, 0, ${ratio})` : '#333333';
+                ctxNn.lineWidth = 0.8;
+                ctxNn.stroke();
+            }
+
+            const outX = xCoords[3];
+            const outY = positions[3][0];
+            const outVal = activations ? activations.output : 0.5;
+            ctxNn.fillStyle = outVal > 0.5 ? `rgba(0, 255, 102, ${0.3 + (outVal-0.5)*1.4})` : `rgba(255, 59, 48, ${0.3 + (0.5-outVal)*1.4})`;
+            ctxNn.beginPath();
+            ctxNn.arc(outX, outY, nodeRadius + 3, 0, 2 * Math.PI);
+            ctxNn.fill();
+            ctxNn.strokeStyle = '#ffffff';
+            ctxNn.lineWidth = 1.5;
+            ctxNn.stroke();
+
+            ctxNn.fillStyle = outVal > 0.5 ? '#00ff66' : '#ff3b30';
+            ctxNn.font = '12px Share Tech Mono';
+            ctxNn.textAlign = 'left';
+            ctxNn.fillText(`CONVICTION: ${(outVal*100).toFixed(1)}%`, outX + 16, outY + 4);
+
+            if (activations) {
+                document.getElementById('nn-active-summary').innerHTML = `
+                    <span style="color:var(--text-primary);">Calculated Activations:</span><br>
+                    Layer 1: ${activations.layer1.filter(v=>v>0).length} nodes active<br>
+                    Layer 2: ${activations.layer2.filter(v=>v>0).length} nodes active<br>
+                    Final Conviction Class 1 (UP) probability: <span style="font-weight:bold; color:${outVal > 0.5 ? 'var(--text-secondary)' : 'var(--alert-color)'}">${(outVal*100).toFixed(1)}%</span>
+                `;
+            }
+        }
+
+        function getMaxAbs(matrix) {
+            let max = 0.001;
+            for(let r=0; r<matrix.length; r++) {
+                for(let c=0; c<matrix[r].length; c++) {
+                    const absVal = Math.abs(matrix[r][c]);
+                    if (absVal > max) max = absVal;
+                }
+            }
+            return max;
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const el = document.getElementById('live-clock');
+            if (el) {
+                el.innerText = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+            }
+        }
+
+        // On Load initialisations
+        window.addEventListener('load', () => {
+            initCharts();
+            loadModelArchitecture();
+            checkServerStatus();
+            
+            updateClock();
+            setInterval(updateClock, 1000);
+            
+            // Pre-load default AAPL historical graph on startup
+            validateAndLoadSecurity("AAPL");
+        });
+
+        // Close autocomplete suggestions when clicking outside
+        window.addEventListener('click', (e) => {
+            if (e.target !== cmdInput && e.target !== suggestionsBox) {
+                closeSuggestions();
+            }
+        });
+
+        // Ping status check threads
+        function checkServerStatus() {
+            fetch('/api/status')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('server-dot').className = 'status-dot';
+                document.getElementById('server-text').innerText = 'CONNECTED';
+                
+                if (data.running && !isBacktestRunning) {
+                    isBacktestRunning = true;
+                    document.getElementById('engine-dot-backtest').className = 'status-dot running';
+                    document.getElementById('engine-text-backtest').innerText = 'RUNNING';
+                    startPollingBacktest();
+                }
+            })
+            .catch(() => {
+                document.getElementById('server-dot').className = 'status-dot offline';
+                document.getElementById('server-text').innerText = 'OFFLINE';
+            });
+
+            fetch('/api/live_status')
+            .then(res => res.json())
+            .then(data => {
+                if (data.running && !isLiveRunning) {
+                    isLiveRunning = true;
+                    document.getElementById('engine-dot-live').className = 'status-dot running';
+                    document.getElementById('engine-text-live').innerText = 'MONITORING';
+                    startPollingLive();
+                }
+            });
+        }
+        setInterval(checkServerStatus, 3000);
+
+    </script>
+</body>
+</html>
