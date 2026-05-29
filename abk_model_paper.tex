@@ -1,0 +1,418 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{geometry}
+\usepackage[hidelinks]{hyperref}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{color}
+
+\geometry{margin=1in}
+
+\title{\textbf{The Aether Bayesian Kernel (ABK) \\ Mathematical Specifications, System Architecture, and Developer Guide}}
+\author{\textbf{Chirag P Patil} \\ \small chiragpatil07@gmail.com}
+\date{May 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document outlines the complete mathematical framework, structural design, and operational logic of the Aether Bayesian Kernel (ABK) Version 3.5.0. ABK integrates a 7-Dimensional relativistic state space, an online Adaptive Bayesian Markov-Switching Model (ABMSM) for regime identification, a Multi-Layer Perceptron (MLP) neural network conviction filter, Expected Shortfall (ES) risk targeting, and Sequential Least Squares Programming (SLSQP) portfolio optimization. We provide rigorous derivations alongside layman-accessible explanations and step-by-step implementation instructions.
+\end{abstract}
+
+\newpage
+
+\tableofcontents
+\newpage
+
+\section{Introduction \& Executive Summary (Layman's Guide)}
+
+Financial markets are non-stationary, meaning their underlying rules, volatility, and trends change over time. Traditional quantitative trading models often fail because they assume market conditions remain constant. The \textbf{Aether Bayesian Kernel (ABK)} is designed to overcome this by treating the market as a shifting environment with \textbf{hidden states} or \textbf{regimes} (such as growth, high-volatility crash, mean-reverting, breakout, or sideways consolidation).
+
+The system consists of five primary components:
+\begin{enumerate}
+    \item \textbf{The Relativistic Data Loader (7D State Space)}: Rather than looking at raw prices, the system transforms data into seven scale-invariant dimensions (representing velocity, risk, volume compression, alpha momentum, relative volatility divergence, macro liquidity, and market breadth). It normalizes these features relative to a moving 500-day window using the Inter-Quartile Range (IQR) to strip away price levels and isolate pure relativistic behavior.
+    \item \textbf{The Bayesian HMM Brain (ABMSM)}: This module estimates the probabilities of the 5 hidden market states using recursive Bayesian updates. It calculates the Shannon Entropy of its beliefs, quantifying how uncertain the system is about current market conditions.
+    \item \textbf{The Neural Network Conviction Engine (MLP)}: A feedforward neural network evaluates the 7 features and the regime probabilities to predict the likelihood of an upward price move. The output acts as a conviction filter.
+    \item \textbf{The Expected Shortfall (ES) Risk Manager}: Positions are sized dynamically. As drawdowns increase, the system penalizes exposure. Instead of simple standard deviation (volatility), it sizes positions using Expected Shortfall (the average of the worst 5\% of historical returns), shielding the portfolio from fat-tail events.
+    \item \textbf{The SLSQP Portfolio Allocator}: When allocating capital across multiple assets, the system runs a quadratic optimization algorithm (Sequential Least Squares Programming) to maximize risk-adjusted returns while adhering to institutional risk boundaries.
+\end{enumerate}
+
+By combining these components, ABK automatically scales positions down during high-uncertainty (high-entropy) regimes and scales up during high-conviction, low-risk regimes, protecting capital while capturing alpha.
+
+\newpage
+\section{The 7-Dimensional Relativistic State Space}
+
+To achieve uniform signal generation across divergent global jurisdictions (e.g., US Equities, Indian Equities, Cryptocurrencies, and Forex), raw market bars must be converted into a unit-less, relativistic state space. Let $P_t$, $H_t$, $L_t$, and $V_t$ represent the close, high, low, and volume of the asset at time index $t$, respectively.
+
+\subsection{Raw Feature Definitions}
+
+The system engineers seven core relativistic features:
+\begin{enumerate}
+    \item \textbf{Directional Velocity ($v_{\text{raw}}$)}: Measures price movement normalized by the Average True Range ($\text{ATR}$):
+    \begin{equation}
+        \text{ATR}_t = \frac{1}{14} \sum_{i=0}^{13} (H_{t-i} - L_{t-i})
+    \end{equation}
+    \begin{equation}
+        v_{\text{raw}, t} = \frac{P_t - P_{t-1}}{\text{ATR}_t + \epsilon}
+    \end{equation}
+    where $\epsilon = 10^{-6}$ is a mathematical stabilizer preventing division by zero.
+    
+    \item \textbf{Local Volatility Risk ($r_{\text{raw}}$)}: Represents the relative size of the daily trading range:
+    \begin{equation}
+        r_{\text{raw}, t} = \frac{\text{ATR}_t}{P_t + \epsilon}
+    \end{equation}
+    
+    \item \textbf{Intrinsic Volatility Compression ($c_{\text{raw}}$)}: Gauges short-term volatility relative to long-term volatility:
+    \begin{equation}
+        \text{Std}_t(N) = \sqrt{\frac{1}{N-1} \sum_{i=0}^{N-1} (\text{Ret}_{t-i} - \overline{\text{Ret}}_N)^2}
+    \end{equation}
+    \begin{equation}
+        c_{\text{raw}, t} = \frac{\text{Std}_t(20)}{\text{Std}_t(100) + \epsilon}
+    \end{equation}
+    where $\text{Ret}_t = (P_t - P_{t-1})/P_{t-1}$.
+    
+    \item \textbf{Cross-Sectional Alpha Momentum ($a_{\text{raw}}$)}: Measures the asset's cumulative returns relative to the benchmark index ($B_t$):
+    \begin{equation}
+        a_{\text{raw}, t} = \sum_{i=0}^{19} \text{Ret}_{t-i} - \left( \frac{B_t - B_{t-20}}{B_{t-20}} \right)
+    \end{equation}
+    
+    \item \textbf{Relative Volatility Divergence ($d_{\text{raw}}$)}: Compares the short-term volatility of the asset to that of the benchmark:
+    \begin{equation}
+        d_{\text{raw}, t} = \frac{\text{Std}_t(20)}{\text{Std}_B(20) + \epsilon}
+    \end{equation}
+    
+    \item \textbf{Macro Liquidity Spread ($l_{\text{raw}}$)}: Estimates liquidity conditions using the yield spread between Treasury yields (10-Year yield $Y_{10}$ and 3-Month yield $Y_{3m}$):
+    \begin{equation}
+        l_{\text{raw}, t} = \frac{Y_{10, t} - Y_{3m, t}}{10.0}
+    \end{equation}
+    
+    \item \textbf{Sector Breadth ($b_{\text{raw}}$)}: Measures the percentage of sector proxy assets trading above their 200-day moving average:
+    \begin{equation}
+        b_{\text{raw}, t} = \frac{1}{M} \sum_{k=1}^M \mathbb{I}(P_{k, t} > \text{MA}_{k, t}(200))
+    \end{equation}
+    where $\mathbb{I}(\cdot)$ is the indicator function and $M$ is the number of assets in the sector proxy basket.
+\end{enumerate}
+
+\subsection{Robust Non-Linear Normalization}
+
+To neutralize extreme outlier distortion, each raw feature is dynamically normalized using a rolling 500-day window via the median ($\tilde{x}$) and Inter-Quartile Range ($\text{IQR}$):
+\begin{equation}
+    \text{IQR}_t(x) = Q_3(x_{t-499:t}) - Q_1(x_{t-499:t})
+\end{equation}
+The standardized z-score is calculated as:
+\begin{equation}
+    z_t = \frac{x_t - \tilde{x}_{t-499:t}}{\text{IQR}_t(x) + \epsilon}
+\end{equation}
+To ensure numerical stability in high-dimensional calculations, the final normalized feature is clipped within a $[-4.0, 4.0]$ threshold:
+\begin{equation}
+    x_{\text{normalized}, t} = \max\left(-4.0, \min\left(4.0, z_t\right)\right)
+\end{equation}
+
+\subsection{Layman's Explanation of Scaling}
+Instead of looking at whether a stock price is \$50 or \$500, we measure how many standard units its price change differs from its usual movement. The Inter-Quartile Range (IQR) focuses on the middle 50\% of historical values, ignoring crazy market spikes. This guarantees that whether we feed the model Bitcoin, Treasury bonds, or Indian stocks, they all look identical mathematically.
+
+\newpage
+\section{The Adaptive Bayesian Markov-Switching Model (ABMSM)}
+
+The ABMSM is a recursive probabilistic engine that maps the 7D normalized coordinate vector $\mathbf{x}_t \in \mathbb{R}^7$ to one of five latent market regimes ($S_t \in \{0, 1, 2, 3, 4\}$):
+\begin{itemize}
+    \item \textbf{Regime 0 (Growth / Low-Vol Up)}
+    \item \textbf{Regime 1 (High-Volatility Crash / Sharp Down)}
+    \item \textbf{Regime 2 (Mean-Reverting / Oscillating)}
+    \item \textbf{Regime 3 (Volatility Breakout / Expansion)}
+    \item \textbf{Regime 4 (Sideways Consolidation / Low-Vol Mean-Rev)}
+\end{itemize}
+
+\subsection{Recursive Bayesian Probability Update}
+
+Let $\boldsymbol{\pi}_t = [\pi_{t, 0}, \pi_{t, 1}, \pi_{t, 2}, \pi_{t, 3}, \pi_{t, 4}]^T$ represent the probability vector at time $t$, where $\pi_{t, k} = P(S_t = k | \mathbf{X}_{1:t})$. The system propagates the probabilities forward using the Chapman-Kolmogorov equation and Bayes' Rule:
+
+\begin{equation}
+    \text{Prior State Probability: } P(S_t = k | \mathbf{X}_{1:t-1}) = \sum_{j=0}^4 A_{j, k} \cdot \pi_{t-1, j}
+\end{equation}
+where $\mathbf{A} \in \mathbb{R}^{5 \times 5}$ is the transition probability matrix ($A_{j, k} = P(S_t = k | S_{t-1} = j)$).
+
+The emission probability $f(\mathbf{x}_t | S_t = k)$ represents the likelihood of observing features $\mathbf{x}_t$ given state $k$. Under a multivariate normal assumption, it is defined as:
+\begin{equation}
+    f(\mathbf{x}_t | S_t = k) = \frac{1}{(2\pi)^{7/2} |\boldsymbol{\Sigma}_k|^{1/2}} \exp\left( -\frac{1}{2} (\mathbf{x}_t - \boldsymbol{\mu}_k)^T \boldsymbol{\Sigma}_k^{-1} (\mathbf{x}_t - \boldsymbol{\mu}_k) \right)
+\end{equation}
+where $\boldsymbol{\mu}_k \in \mathbb{R}^7$ and $\boldsymbol{\Sigma}_k \in \mathbb{R}^{7 \times 7}$ are the mean vector and covariance matrix of Regime $k$.
+
+The posterior probability update (Bayes' Rule) is computed as:
+\begin{equation}
+    \pi_{t, k} = \frac{f(\mathbf{x}_t | S_t = k) \cdot P(S_t = k | \mathbf{X}_{1:t-1})}{\sum_{m=0}^4 f(\mathbf{x}_t | S_t = m) \cdot P(S_t = m | \mathbf{X}_{1:t-1})}
+\end{equation}
+
+\subsection{Dirichlet-Multinomial Online Transition Memory}
+
+To allow the transition matrix $\mathbf{A}$ to adapt dynamically to changing market microstructures without losing long-term memories, the transitions are modeled using a Dirichlet distribution prior. The counts of observed regime transitions $N_{j, k}$ are updated recursively:
+\begin{equation}
+    N_{j, k, t} = \lambda_N \cdot N_{j, k, t-1} + \pi_{t-1, j} \cdot \pi_{t, k}
+\end{equation}
+where $\lambda_N \in (0.99, 1.0)$ is a decay rate. The transition matrix parameters are updated as:
+\begin{equation}
+    A_{j, k} = \frac{\alpha_{j, k} + N_{j, k, t}}{\sum_{m=0}^4 (\alpha_{j, m} + N_{j, m, t})}
+\end{equation}
+where $\alpha_{j, k}$ is the baseline Dirichlet prior parameter.
+
+\subsection{Shannon Entropy Filter}
+
+To quantify the model's uncertainty regarding the current regime, the normalized Shannon Entropy $H_t$ is calculated:
+\begin{equation}
+    H_t = -\frac{1}{\ln(5)} \sum_{k=0}^4 \pi_{t, k} \cdot \ln(\pi_{t, k} + \epsilon)
+\end{equation}
+$H_t \in [0, 1]$. If $H_t \to 1$, the regimes are equally probable (maximum uncertainty). If $H_t \to 0$, the model is highly certain of a single regime.
+
+\newpage
+\section{The Deep Learning Conviction Engine}
+
+The Multi-Layer Perceptron (MLP) acts as a non-linear classifier to verify if the engineered features and regime probabilities translate into upward price conviction.
+
+\subsection{Architecture Specification}
+\begin{itemize}
+    \item \textbf{Input Layer ($\mathbf{z}^{(0)} \in \mathbb{R}^7$)}: Relativistic features $\mathbf{x}_t$.
+    \item \textbf{Hidden Layer 1 ($\mathbf{a}^{(1)} \in \mathbb{R}^{32}$)}: Rectified Linear Unit ($\text{ReLU}$).
+    \item \textbf{Hidden Layer 2 ($\mathbf{a}^{(2)} \in \mathbb{R}^{16}$)}: Rectified Linear Unit ($\text{ReLU}$).
+    \item \textbf{Output Layer ($y \in [0, 1]$)}: Sigmoid (Upward conviction probability).
+\end{itemize}
+
+\subsection{Forward Propagation Equations}
+
+The inputs to Hidden Layer 1 are propagated as:
+\begin{equation}
+    \mathbf{z}^{(1)} = \mathbf{W}^{(1)} \mathbf{x}_t + \mathbf{b}^{(1)}
+\end{equation}
+\begin{equation}
+    \mathbf{a}^{(1)} = \max(0, \mathbf{z}^{(1)}) \quad (\text{ReLU Activation})
+\end{equation}
+where $\mathbf{W}^{(1)} \in \mathbb{R}^{32 \times 7}$ and $\mathbf{b}^{(1)} \in \mathbb{R}^{32}$.
+
+Hidden Layer 2 receives the activations $\mathbf{a}^{(1)}$:
+\begin{equation}
+    \mathbf{z}^{(2)} = \mathbf{W}^{(2)} \mathbf{a}^{(1)} + \mathbf{b}^{(2)}
+\end{equation}
+\begin{equation}
+    \mathbf{a}^{(2)} = \max(0, \mathbf{z}^{(2)}) \quad (\text{ReLU Activation})
+\end{equation}
+where $\mathbf{W}^{(2)} \in \mathbb{R}^{16 \times 32}$ and $\mathbf{b}^{(2)} \in \mathbb{R}^{16}$.
+
+The output layer aggregates the activations of Hidden Layer 2:
+\begin{equation}
+    z^{(3)} = \mathbf{W}^{(3)} \mathbf{a}^{(2)} + b^{(3)}
+\end{equation}
+\begin{equation}
+    P(\text{Up}_t | \mathbf{x}_t) = \sigma(z^{(3)}) = \frac{1}{1 + e^{-z^{(3)}}} \quad (\text{Sigmoid Activation})
+\end{equation}
+where $\mathbf{W}^{(3)} \in \mathbb{R}^{1 \times 16}$ and $b^{(3)} \in \mathbb{R}$.
+
+\subsection{Layman's Explanation of the MLP}
+The neural network takes the 7 normalized features and feeds them through a network of 32 nodes, then 16 nodes, and finally consolidates them into a single score between 0\% and 100\% (conviction). If this conviction is high ($>53\%$), it triggers a buy signal. If it is low ($<47\%$), it triggers a sell/liquidate signal.
+
+\newpage
+\section{Institutional Risk Sizing \& Expected Shortfall}
+
+A major risk in quantitative trading is tail-risk (extreme, unexpected market crashes). Relying only on standard deviation (volatility) assumes returns are normally distributed (a bell curve). However, market returns exhibit "fat tails" (outliers happen more frequently than predicted by a normal curve).
+
+To protect capital, ABK utilizes \textbf{Expected Shortfall (ES)} (also known as Conditional Value-at-Risk) alongside drawdown feedback loops.
+
+\subsection{Drawdown Penalty Modulation}
+
+The system tracks peak historical portfolio equity ($E_{\text{peak}}$) to measure the current percentage drawdown ($D_t$):
+\begin{equation}
+    E_{\text{peak}, t} = \max_{s \le t} E_s
+\end{equation}
+\begin{equation}
+    D_t = \frac{E_{\text{peak}, t} - E_t}{E_{\text{peak}, t}}
+\end{equation}
+To protect the system from getting caught in a downward equity spiral, a risk penalty multiplier $C_{\text{penalty}}$ is calculated:
+\begin{equation}
+    C_{\text{penalty}, t} = \exp( -5.0 \cdot D_t )
+\end{equation}
+If $D_t = 0$, $C_{\text{penalty}} = 1.0$ (no allocation reduction). If drawdown increases to 10\% ($D_t = 0.10$), $C_{\text{penalty}} \approx 0.60$, scaling down all position exposures by 40\%.
+
+\subsection{Value-at-Risk (VaR) and Expected Shortfall (ES)}
+
+Let $\alpha = 0.95$ represent the institutional confidence level. Value-at-Risk ($\text{VaR}_{\alpha}$) is the maximum expected loss over a one-day horizon at a 95\% confidence level. Let $R$ represent the historical returns distribution of the target asset.
+\begin{equation}
+    \text{VaR}_{0.95} = \inf \{ L : P(\text{Loss} > L) \le 0.05 \}
+\end{equation}
+Expected Shortfall ($\text{ES}_{0.95}$) measures the average loss in the worst 5\% of cases:
+\begin{equation}
+    \text{ES}_{0.95} = \mathbb{E}[ \text{Loss} | \text{Loss} \ge \text{VaR}_{0.95} ] = \frac{1}{0.05} \int_{0.95}^{1.0} \text{VaR}_u \, du
+\end{equation}
+
+In practice, for historical discrete returns, let $R_{(1)} \le R_{(2)} \le \dots \le R_{(K)}$ represent the sorted return vector of length $K$. The 95\% index is $k = \lfloor 0.05 \cdot K \rfloor$.
+\begin{equation}
+    \text{VaR}_{0.95} = -R_{(k)}
+\end{equation}
+\begin{equation}
+    \text{ES}_{0.95} = -\frac{1}{k} \sum_{i=1}^k R_{(i)}
+\end{equation}
+
+\subsection{Dynamic Allocation Sizing}
+
+The target portfolio risk limit is defined by the target annualized volatility, normalized to a daily horizon ($r_{\text{target}}$):
+\begin{equation}
+    r_{\text{target}} = \frac{\sigma_{\text{annualized}}}{\sqrt{252}}
+\end{equation}
+Under normal distributions, Expected Shortfall at 95\% relates to daily volatility as $\text{ES}_{\text{target}} = 2.06 \cdot r_{\text{target}}$. The optimal capital allocation size ($V_t$) for the asset is computed as:
+\begin{equation}
+    V_t = E_t \cdot \frac{\text{ES}_{\text{target}}}{\text{ES}_{0.95, t}} \cdot \text{Signal}_t \cdot C_{\text{penalty}, t}
+\end{equation}
+where $\text{Signal}_t$ is the regime-weighted directional signal from the Bayesian brain.
+
+\newpage
+\section{Institutional Portfolio Optimization (SLSQP)}
+
+When multiple assets are monitored simultaneously, individual asset allocation signals are aggregated and optimized. The goal is to maximize the risk-adjusted returns (Sharpe ratio) while honoring concentration and leverage limits.
+
+\subsection{Mathematical Formulation}
+
+Let $\mathbf{w} \in \mathbb{R}^N$ represent the weights of the $N$ assets in the portfolio. Let $\mathbf{u} \in \mathbb{R}^N$ represent the expected returns vector of the assets, calculated by scaling raw HMM convictions, and let $\boldsymbol{\Sigma} \in \mathbb{R}^{N \times N}$ represent the asset covariance matrix.
+
+We solve the following constrained optimization problem:
+\begin{equation}
+    \min_{\mathbf{w}} \left( -\mathbf{w}^T \mathbf{u} + \frac{\gamma}{2} \mathbf{w}^T \boldsymbol{\Sigma} \mathbf{w} \right)
+\end{equation}
+subject to:
+\begin{equation}
+    \sum_{i=1}^N w_i \le W_{\text{max}} \quad (\text{Leveraged Cash Cap})
+\end{equation}
+\begin{equation}
+    0.0 \le w_i \le c_{\text{max}} \quad \forall i \in \{1, \dots, N\} \quad (\text{SEBI/SEC Concentration Limits})
+\end{equation}
+where $\gamma$ represents the risk-aversion coefficient, $W_{\text{max}}$ is the maximum portfolio leverage (typically $1.0$ for non-margin accounts), and $c_{\text{max}}$ is the individual concentration limit (SEBI compliance cap of 30\%, i.e. $0.30$).
+
+This optimization is solved programmatically using the Sequential Least Squares Programming (SLSQP) algorithm inside Python's \texttt{scipy.optimize} suite.
+
+\newpage
+\section{Pre-Trade Compliance Rules}
+
+Before an allocation signal is executed, it passes through the Compliance Gate to ensure strict adherence to SEC Rule 15c3-5 (Market Access Rule) and SEBI (Securities and Exchange Board of India) algorithmic restrictions.
+
+\subsection{SEBI Order-to-Trade Ratio (OTR) Throttling}
+
+To prevent algo overloading or spoofing, SEBI enforces strict OTR limits. If the number of orders exceeds a threshold relative to completed trades, penalty margins are applied. The system maintains compliance by tracking:
+\begin{equation}
+    \text{OTR}_t = \frac{\text{Total Orders}_t}{\text{Total Executed Trades}_t + 1}
+\end{equation}
+If $\text{OTR}_t > 50$, the Compliance Gate throttles the execution engine, blocking new order submittals and permitting only liquidations:
+\begin{equation}
+    \text{Action} = 
+    \begin{cases} 
+        \text{Permit Order} & \text{if } \text{OTR}_t \le 50 \text{ or } \text{Weight}_{\text{target}} < \text{Weight}_{\text{current}} \\
+        \text{Block Order} & \text{if } \text{OTR}_t > 50 \text{ and } \text{Weight}_{\text{target}} \ge \text{Weight}_{\text{current}}
+    \end{cases}
+\end{equation}
+
+\subsection{Static Price Band \& Circuit Limit Verification}
+
+To prevent execution during flash-crashes, the system validates the execution price $P_t$ against the previous close $P_{t-1}$:
+\begin{equation}
+    \text{Price Deviation} = \frac{|P_t - P_{t-1}|}{P_{t-1}}
+\end{equation}
+Orders are blocked if the deviation exceeds the designated circuit limit (typically 10\%):
+\begin{equation}
+    \text{Verification} = 
+    \begin{cases} 
+        \text{Approved} & \text{if } \text{Price Deviation} \le 0.10 \\
+        \text{Rejected} & \text{if } \text{Price Deviation} > 0.10
+    \end{cases}
+\end{equation}
+
+\newpage
+\section{Real-Time Caching \& Patching Logic}
+
+To make the system highly responsive (sub-100ms updates) and protect the system from yfinance API rate-limiting, a local in-memory caching and tick patching architecture is deployed in \texttt{UniversalLoader} (\href{file:///Users/apple/Personal_Files/Codes/QuantSystem/src/engine/data_loader.py}{\texttt{data\_loader.py}}).
+
+\subsection{Mathematical Blending Algorithm}
+
+Let $\mathbf{D}_{\text{cached}} \in \mathbb{R}^{K \times 7N}$ represent the cached historical multi-index data matrix up to day $t-1$ for the $N$ universe assets.
+Let $\mathbf{P}_{\text{live}, t} \in \mathbb{R}^{1 \times 5}$ represent a single real-time bar for the target asset containing the current day's $[O_t, H_t, L_t, C_t, V_t]$.
+
+The loader blends this single real-time bar with the cached history:
+\begin{equation}
+    \mathbf{D}_{\text{blended}} = \mathbf{D}_{\text{cached}} \cup \{ \mathbf{P}_{\text{live}, t} \}
+\end{equation}
+To fill the missing entries for other universe assets at time $t$, a forward-fill operation is executed:
+\begin{equation}
+    \mathbf{D}_{\text{final}} = \text{ForwardFill}(\mathbf{D}_{\text{blended}})
+\end{equation}
+where:
+\begin{equation}
+    D_{i, j, \text{final}} = 
+    \begin{cases}
+        D_{i, j, \text{blended}} & \text{if } D_{i, j, \text{blended}} \ne \text{NaN} \\
+        D_{i-1, j, \text{final}} & \text{if } D_{i, j, \text{blended}} = \text{NaN}
+    \end{cases}
+\end{equation}
+This allows the system to compute recursive 7D features instantly without downloading 3 years of historical data on every poll.
+
+\newpage
+\section{Developer Integration Guide}
+
+This section describes how a developer can run, configure, and modify the ABK system.
+
+\subsection{Configuration Panel}
+The institutional parameters are defined in \texttt{config.yaml}. The key sections include:
+\begin{verbatim}
+regime_model:
+  abmsm:
+    save_path: "models/abmsm_trained.pkl"
+  instinct_save_path: "models/global_hmm_instinct.pkl"
+
+portfolio:
+  initial_capital: 100000.0
+  risk_aversion: 1.5
+  leverage_limit: 1.0
+
+compliance:
+  max_weight: 0.30
+  otr_threshold: 50
+  circuit_limit: 0.10
+\end{verbatim}
+
+\subsection{Step-by-Step Deployment Protocol}
+
+\begin{enumerate}
+    \item \textbf{Setup Virtual Environment}:
+    \begin{verbatim}
+    python -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    \end{verbatim}
+    
+    \item \textbf{Train HMM Brain Baseline}:
+    Run the instinct trainer to generate covariance matrices and emission profiles from historical indices:
+    \begin{verbatim}
+    python scripts/train_instinct.py
+    \end{verbatim}
+    
+    \item \textbf{Execute Backtest Sandbox}:
+    Run a simulation on a specific asset (e.g., ETERNAL.NS) to generate attribution statistics and export a report:
+    \begin{verbatim}
+    python src/research/sandbox.py --ticker ETERNAL.NS
+    \end{verbatim}
+    
+    \item \textbf{Run the Bloomberg Dashboard Interface}:
+    Start the lightweight HTTP dashboard server:
+    \begin{verbatim}
+    python dashboard_server.py
+    \end{verbatim}
+    Open your browser and navigate to \texttt{http://localhost:8080}.
+    
+    \item \textbf{Command Bar Prompts}:
+    Use keyboard inputs in the dashboard input bar:
+    \begin{itemize}
+        \item \texttt{AAPL GP}: Loads Apple Inc. history and displays its price chart.
+        \item \texttt{ETERNAL.NS GP}: Loads rebranded Zomato history, switches the formatting base to INR, and plots prices.
+        \item \texttt{ALLOC 50000}: Set paper trading allocation pool to INR 50,000 or \$50,000.
+        \item \texttt{MONITOR} or \texttt{MON}: Spawns a real-time paper trading loop polling the yfinance live patching loader.
+    \end{itemize}
+\end{enumerate}
+
+\end{document}

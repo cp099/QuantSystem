@@ -21,6 +21,8 @@ models/
 reports/
 *.png
 *.pdf
+abk_model_paper.pdf
+
 
 # --- SYSTEM ARTIFACTS ---
 # MacOS
