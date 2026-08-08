@@ -14,6 +14,7 @@ import sys
 import joblib
 import time
 import yfinance as yf
+import re
 
 PORT = 8080
 RUNNING_PROCESS = None
@@ -24,6 +25,10 @@ LIVE_LOCK = threading.Lock()
 # Ticker Alias Map & Cache buffers
 VALIDATION_CACHE = {}
 HISTORY_CACHE = {}
+
+# Security Input Validation Whitelists
+TICKER_REGEX = re.compile(r'^[A-Za-z0-9\.\-\^=\:]{1,50}$')
+VALID_PERIODS = ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]
 
 def resolve_ticker_alias(ticker):
     ticker_upper = ticker.upper().strip()
@@ -166,6 +171,10 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
                 except Exception:
                     pass
             
+            if not isinstance(ticker, str) or not TICKER_REGEX.match(ticker):
+                self.wfile.write(json.dumps({"valid": False, "ticker": ticker, "error": "Invalid ticker format"}).encode("utf-8"))
+                return
+            
             resolved_ticker = resolve_ticker_alias(ticker)
             
             if resolved_ticker in VALIDATION_CACHE:
@@ -198,6 +207,10 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
                     period = self.path.split("period=")[1].split("&")[0]
                 except Exception:
                     pass
+            
+            if not isinstance(ticker, str) or not TICKER_REGEX.match(ticker) or period not in VALID_PERIODS:
+                self.wfile.write(json.dumps({"error": "Invalid ticker or period"}).encode("utf-8"))
+                return
             
             ticker = resolve_ticker_alias(ticker)
             
@@ -264,7 +277,17 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
                 params = {}
                 
             run_type = params.get("type", "master")
-            ticker = resolve_ticker_alias(params.get("ticker", "AAPL"))
+            if run_type not in ["master", "sandbox"]:
+                run_type = "master"
+                
+            raw_ticker = params.get("ticker", "AAPL")
+            if not isinstance(raw_ticker, str) or not TICKER_REGEX.match(raw_ticker):
+                self.send_response(400)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Invalid ticker format"}).encode("utf-8"))
+                return
+            ticker = resolve_ticker_alias(raw_ticker)
             
             # Form command
             python_exec = sys.executable
@@ -335,9 +358,38 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
             except Exception:
                 params = {}
                 
-            ticker = resolve_ticker_alias(params.get("ticker", "AAPL"))
-            interval = str(params.get("interval", 10))
-            allocation = str(params.get("allocation", 100000.0))
+            raw_ticker = params.get("ticker", "AAPL")
+            if not isinstance(raw_ticker, str) or not TICKER_REGEX.match(raw_ticker):
+                self.send_response(400)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Invalid ticker format"}).encode("utf-8"))
+                return
+            ticker = resolve_ticker_alias(raw_ticker)
+            
+            try:
+                interval_int = int(params.get("interval", 10))
+                if not (1 <= interval_int <= 3600):
+                    raise ValueError()
+                interval = str(interval_int)
+            except (ValueError, TypeError):
+                self.send_response(400)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Invalid interval value"}).encode("utf-8"))
+                return
+
+            try:
+                allocation_float = float(params.get("allocation", 100000.0))
+                if not (0.0 < allocation_float <= 1e12):
+                    raise ValueError()
+                allocation = f"{allocation_float:.2f}"
+            except (ValueError, TypeError):
+                self.send_response(400)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Invalid allocation value"}).encode("utf-8"))
+                return
             
             # Form command
             python_exec = sys.executable
