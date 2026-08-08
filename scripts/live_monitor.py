@@ -235,9 +235,21 @@ def run_live_monitor(ticker, interval=10, allocation=100000.0):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ticker", type=str, default="AAPL", help="Security ticker to monitor")
-    parser.add_argument("--interval", type=int, default=10, help="Polling interval in seconds")
-    parser.add_argument("--allocation", type=float, default=100000.0, help="Starting allocation fund pool")
+    parser.add_argument("--ticker", type=str, default=None, help="Security ticker to monitor")
+    parser.add_argument("--interval", type=int, default=None, help="Polling interval in seconds")
+    parser.add_argument("--allocation", type=float, default=None, help="Starting allocation fund pool")
     args = parser.parse_args()
     
-    run_live_monitor(args.ticker, args.interval, args.allocation)
+    ticker = args.ticker or os.environ.get("ABK_TICKER") or "AAPL"
+    
+    interval_val = args.interval
+    if interval_val is None:
+        env_interval = os.environ.get("ABK_INTERVAL")
+        interval_val = int(env_interval) if env_interval else 10
+        
+    allocation_val = args.allocation
+    if allocation_val is None:
+        env_alloc = os.environ.get("ABK_ALLOCATION")
+        allocation_val = float(env_alloc) if env_alloc else 100000.0
+        
+    run_live_monitor(ticker, interval_val, allocation_val)

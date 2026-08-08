@@ -294,7 +294,7 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
             if run_type == "master":
                 cmd = [python_exec, "main.py"]
             else:
-                cmd = [python_exec, "src/research/sandbox.py", "--ticker", ticker]
+                cmd = [python_exec, "src/research/sandbox.py"]
                 
             # Direct output logs
             os.makedirs("logs", exist_ok=True)
@@ -318,11 +318,13 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
                 
                 # Launch new process
                 log_file = open(log_path, "a", encoding="utf-8")
+                process_env = os.environ.copy()
+                process_env["ABK_TICKER"] = ticker
                 RUNNING_PROCESS = subprocess.Popen(
                     cmd,
                     stdout=log_file,
                     stderr=log_file,
-                    env=os.environ.copy(),
+                    env=process_env,
                     bufsize=1,
                     universal_newlines=True
                 )
@@ -393,7 +395,7 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
             
             # Form command
             python_exec = sys.executable
-            cmd = [python_exec, "scripts/live_monitor.py", "--ticker", ticker, "--interval", interval, "--allocation", allocation]
+            cmd = [python_exec, "scripts/live_monitor.py"]
                 
             # Direct output logs
             os.makedirs("logs", exist_ok=True)
@@ -417,11 +419,15 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
                 
                 # Launch new process
                 log_file = open(log_path, "a", encoding="utf-8")
+                process_env = os.environ.copy()
+                process_env["ABK_TICKER"] = ticker
+                process_env["ABK_INTERVAL"] = interval
+                process_env["ABK_ALLOCATION"] = allocation
                 LIVE_PROCESS = subprocess.Popen(
                     cmd,
                     stdout=log_file,
                     stderr=log_file,
-                    env=os.environ.copy(),
+                    env=process_env,
                     bufsize=1,
                     universal_newlines=True
                 )

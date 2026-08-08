@@ -147,6 +147,10 @@ def run_universal_sandbox(ticker):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ticker", type=str, required=True)
+    parser.add_argument("--ticker", type=str, required=False)
     args = parser.parse_args()
-    run_universal_sandbox(args.ticker)
+    ticker = args.ticker or os.environ.get("ABK_TICKER")
+    if not ticker:
+        print("[AUDIT KERNEL] ERROR: Ticker not specified via --ticker or ABK_TICKER environment variable.")
+        sys.exit(1)
+    run_universal_sandbox(ticker)
